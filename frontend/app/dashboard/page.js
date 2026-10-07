@@ -415,7 +415,6 @@ export default function Dashboard() {
   const primaryNavItems = [
     { name: "Dashboard", icon: "🏠" },
     { name: "Screenshots", icon: "📸" },
-    { name: "Search", icon: "🔍" },
     { name: "Categories", icon: "📂" },
     { name: "Action Center", icon: "📝" },
     { name: "Calendar", icon: "📅" },
