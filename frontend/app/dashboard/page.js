@@ -8,6 +8,7 @@ import {
   fetchScreenshotsApi,
   uploadScreenshotApi,
   fetchScreenshotByIdApi,
+  deleteScreenshotApi,
 } from "../utils/api";
 import ScreenshotDetailsModal from "../components/ScreenshotDetailsModal";
 
@@ -283,6 +284,18 @@ export default function Dashboard() {
         setIsUploading(false);
         setUploadStatus(null);
       }, 2000);
+    }
+  };
+
+  const handleDeleteScreenshot = async (id) => {
+    try {
+      await deleteScreenshotApi(id);
+      // Remove from UI state immediately
+      setDbScreenshots((prev) => prev.filter((s) => s._id !== id && s.id !== id));
+      setSelectedScreenshot(null);
+    } catch (err) {
+      console.error("Delete failed:", err.message);
+      alert(`Failed to delete screenshot: ${err.message}`);
     }
   };
 
@@ -782,6 +795,7 @@ export default function Dashboard() {
         <ScreenshotDetailsModal
           screenshot={selectedScreenshot}
           onClose={() => setSelectedScreenshot(null)}
+          onDelete={handleDeleteScreenshot}
         />
       )}
     </div>
