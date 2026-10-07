@@ -415,15 +415,14 @@ export default function Dashboard() {
   const primaryNavItems = [
     { name: "Dashboard", icon: "🏠", href: "/dashboard" },
     { name: "Screenshots", icon: "📸", href: "/screenshots" },
-    { name: "Categories", icon: "📂", href: "/screenshots" },
     { name: "Action Center", icon: "📝", href: "/action-center" },
     { name: "Calendar", icon: "📅", href: "/dashboard" },
     { name: "Reminders", icon: "🔔" },
     { name: "Vault", icon: "🔒" },
-    { name: "Insights", icon: "📊" },
   ];
 
   const secondaryNavItems = [
+    { name: "Insights", icon: "📊" },
     { name: "Settings", icon: "⚙️" },
     { name: "Help", icon: "❓" },
   ];
@@ -575,7 +574,7 @@ export default function Dashboard() {
                   <button
                     key={item.name}
                     onClick={() => {
-                      if (item.name === "Screenshots" || item.name === "Categories") {
+                      if (item.name === "Screenshots") {
                         router.push("/screenshots");
                       } else if (item.name === "Action Center") {
                         router.push("/action-center");
