@@ -279,14 +279,25 @@ export const toggleFavorite = async (req, res, next) => {
  */
 export const deleteScreenshot = async (req, res, next) => {
   try {
-    const screenshot = await Screenshot.findOneAndDelete({ _id: req.params.id, user: req.userId })
+    const screenshot = await Screenshot.findOne({ _id: req.params.id, user: req.userId })
 
     if (!screenshot) {
       return res.status(404).json({ success: false, error: 'Screenshot not found.' })
     }
 
+    // Attempt to delete from Cloudinary if publicId exists
+    const publicId = screenshot.storage?.publicId
+    if (publicId) {
+      const { deleteImage } = await import('./storage.service.js')
+      await deleteImage(publicId)
+    }
+
+    // If Cloudinary delete succeeds (or no publicId exists), delete from MongoDB
+    await Screenshot.findByIdAndDelete(screenshot._id)
+
     res.status(200).json({ success: true, message: 'Screenshot deleted successfully.' })
   } catch (error) {
+    logger.error(`Error deleting screenshot ${req.params.id}:`, error)
     next(error)
   }
 }

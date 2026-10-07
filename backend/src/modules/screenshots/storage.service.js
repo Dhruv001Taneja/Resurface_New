@@ -144,3 +144,39 @@ export const storeImage = async (file) => {
     uploadStream.end(file.buffer)
   })
 }
+
+/**
+ * Delete an image from Cloudinary using its public_id.
+ * No local file is deleted since images are not stored permanently on the local server.
+ *
+ * @param {string} publicId - The Cloudinary public_id of the image
+ * @returns {Promise<Object>} The Cloudinary deletion result
+ */
+export const deleteImage = async (publicId) => {
+  if (!publicId) return null;
+
+  const missingVars = getMissingCloudinaryConfig()
+  if (missingVars.length > 0) {
+    const errorMsg = `Cloudinary credentials missing in backend/.env: ${missingVars.join(', ')}`
+    logger.error(`❌ ${errorMsg}`)
+    throw new Error(errorMsg)
+  }
+
+  configureCloudinary()
+
+  try {
+    logger.info(`Deleting image with public ID "${publicId}" from Cloudinary...`)
+    const result = await cloudinary.uploader.destroy(publicId)
+    
+    if (result.result === 'ok') {
+      logger.info(`✅ Cloudinary delete successful: ${publicId}`)
+    } else {
+      logger.warn(`⚠️ Cloudinary delete returned: ${result.result} for ${publicId}`)
+    }
+    
+    return result
+  } catch (error) {
+    logger.error('❌ Cloudinary delete failed:', error.message)
+    throw new Error(`Cloudinary delete failed: ${error.message}`)
+  }
+}

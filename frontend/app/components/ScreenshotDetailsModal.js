@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 
 // Pipeline stage badge component
 function PipelineStep({ label, status }) {
@@ -40,7 +40,10 @@ function PipelineStep({ label, status }) {
   );
 }
 
-export default function ScreenshotDetailsModal({ screenshot, onClose }) {
+export default function ScreenshotDetailsModal({ screenshot, onClose, onDelete }) {
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+
   if (!screenshot) return null;
 
   // Safe field extractors
@@ -430,18 +433,56 @@ export default function ScreenshotDetailsModal({ screenshot, onClose }) {
         </div>
 
         {/* Modal Footer */}
-        <div className="px-6 py-3 border-t border-gray-200 bg-gray-50/50 flex items-center justify-between">
+        <div className="px-6 py-3 border-t border-gray-200 bg-gray-50/50 flex flex-col sm:flex-row items-center justify-between gap-3">
           <span className="text-xs text-gray-500 font-mono">
             {screenshot.createdAt
               ? `Uploaded ${new Date(screenshot.createdAt).toLocaleString()}`
               : ""}
           </span>
-          <button
-            onClick={onClose}
-            className="px-5 py-2 bg-gray-800 hover:bg-gray-900 text-white rounded-lg text-sm font-semibold transition-colors shadow-xs"
-          >
-            Close
-          </button>
+          <div className="flex items-center gap-2">
+            {!showConfirm ? (
+              <>
+                {onDelete && (
+                  <button
+                    onClick={() => setShowConfirm(true)}
+                    className="px-4 py-2 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded-lg text-sm font-semibold transition-colors"
+                  >
+                    Delete
+                  </button>
+                )}
+                <button
+                  onClick={onClose}
+                  className="px-5 py-2 bg-gray-800 hover:bg-gray-900 text-white rounded-lg text-sm font-semibold transition-colors shadow-xs"
+                >
+                  Close
+                </button>
+              </>
+            ) : (
+              <div className="flex items-center gap-3 bg-red-50 px-3 py-1.5 rounded-lg border border-red-200">
+                <span className="text-xs font-semibold text-red-700">Permanently delete this screenshot?</span>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => setShowConfirm(false)}
+                    disabled={isDeleting}
+                    className="px-3 py-1.5 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 rounded-md text-xs font-semibold transition-colors disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={async () => {
+                      setIsDeleting(true);
+                      await onDelete(screenshot._id || screenshot.id);
+                      setIsDeleting(false);
+                    }}
+                    disabled={isDeleting}
+                    className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-md text-xs font-semibold transition-colors disabled:opacity-50 flex items-center gap-1.5"
+                  >
+                    {isDeleting ? "Deleting..." : "Yes, Delete"}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>

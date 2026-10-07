@@ -183,3 +183,26 @@ export async function fetchScreenshotByIdApi(id) {
   return data;
 }
 
+/**
+ * Delete screenshot by ID
+ */
+export async function deleteScreenshotApi(id) {
+  const authToken = getStoredToken();
+  if (!authToken) throw new Error('Not authenticated');
+
+  const response = await fetch(`${API_BASE_URL}/screenshots/${id}`, {
+    method: 'DELETE',
+    headers: {
+      'Authorization': `Bearer ${authToken}`,
+      'Content-Type': 'application/json',
+    },
+  });
+
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.error || data.message || 'Failed to delete screenshot');
+  }
+
+  return data;
+}
+

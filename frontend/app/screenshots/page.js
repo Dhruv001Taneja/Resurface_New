@@ -8,6 +8,7 @@ import {
   fetchScreenshotsApi,
   uploadScreenshotApi,
   fetchScreenshotByIdApi,
+  deleteScreenshotApi,
 } from "../utils/api";
 import Sidebar from "../components/Sidebar";
 import ScreenshotDetailsModal from "../components/ScreenshotDetailsModal";
@@ -33,9 +34,10 @@ export default function ScreenshotsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Upload States
+  // Upload & Action States
   const [isUploading, setIsUploading] = useState(false);
   const [uploadStatus, setUploadStatus] = useState(null);
+  const [successMessage, setSuccessMessage] = useState(null);
   const fileInputRef = useRef(null);
 
   // Polling ref for background AI processing
@@ -208,6 +210,27 @@ export default function ScreenshotsPage() {
     }
   };
 
+  const handleDeleteScreenshot = async (id) => {
+    try {
+      await deleteScreenshotApi(id);
+      // Remove from UI state immediately
+      setScreenshots((prev) => prev.filter((s) => s._id !== id && s.id !== id));
+      setSelectedScreenshot(null);
+      
+      // Show success banner
+      setSuccessMessage("Screenshot deleted successfully.");
+      setTimeout(() => {
+        setSuccessMessage(null);
+      }, 3000);
+      
+      // Optionally update pagination count locally if we care, but refreshing is fine too
+      // We already removed it from view, let background poll/reload fix the count if needed
+    } catch (err) {
+      console.error("Delete failed:", err.message);
+      alert(`Failed to delete screenshot: ${err.message}`);
+    }
+  };
+
   const userName = user?.name || user?.email?.split("@")[0] || "User";
 
   return (
@@ -301,6 +324,14 @@ export default function ScreenshotsPage() {
             <div className="mb-6 p-4 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-700 text-sm flex items-center gap-3 animate-pulse shadow-sm">
               <span className="h-3 w-3 rounded-full bg-indigo-600 animate-ping" />
               <span className="font-semibold">{uploadStatus}</span>
+            </div>
+          )}
+
+          {/* Success Status Banner */}
+          {successMessage && (
+            <div className="mb-6 p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm flex items-center gap-3 shadow-sm">
+              <span className="text-lg">✅</span>
+              <span className="font-semibold">{successMessage}</span>
             </div>
           )}
 
@@ -669,6 +700,7 @@ export default function ScreenshotsPage() {
         <ScreenshotDetailsModal
           screenshot={selectedScreenshot}
           onClose={() => setSelectedScreenshot(null)}
+          onDelete={handleDeleteScreenshot}
         />
       )}
     </div>
