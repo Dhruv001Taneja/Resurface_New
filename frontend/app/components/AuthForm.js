@@ -134,8 +134,8 @@ export default function AuthForm({ initialMode = "login" }) {
 
   if (isAuthLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-950">
-        <div className="flex items-center gap-3 text-indigo-400 font-medium">
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <div className="flex items-center gap-3 text-indigo-600 font-medium">
           <svg className="animate-spin h-6 w-6 text-indigo-500" fill="none" viewBox="0 0 24 24">
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
@@ -147,10 +147,10 @@ export default function AuthForm({ initialMode = "login" }) {
   }
 
   return (
-    <div className="relative min-h-screen flex flex-col justify-center items-center bg-slate-950 px-4 py-12 text-slate-100 overflow-hidden">
+    <div className="relative min-h-screen flex flex-col justify-center items-center bg-slate-50 px-4 py-12 text-slate-900 overflow-hidden">
       {/* Background Glow Accents */}
-      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[350px] bg-gradient-to-tr from-indigo-600/30 via-purple-600/20 to-pink-500/10 blur-3xl pointer-events-none rounded-full" />
-      <div className="absolute bottom-10 right-10 w-[400px] h-[400px] bg-blue-600/15 blur-3xl pointer-events-none rounded-full" />
+      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[350px] bg-gradient-to-tr from-indigo-200/50 via-purple-200/40 to-pink-200/30 blur-3xl pointer-events-none rounded-full" />
+      <div className="absolute bottom-10 right-10 w-[400px] h-[400px] bg-blue-200/40 blur-3xl pointer-events-none rounded-full" />
 
       {/* Main Container Card */}
       <div className="w-full max-w-md z-10">
@@ -160,26 +160,26 @@ export default function AuthForm({ initialMode = "login" }) {
             <div className="h-10 w-10 rounded-xl bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center font-bold text-white shadow-lg shadow-indigo-500/30 group-hover:scale-105 transition-transform">
               RE
             </div>
-            <span className="font-extrabold text-2xl tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white via-slate-200 to-indigo-200">
+            <span className="font-extrabold text-2xl tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-indigo-700 via-purple-700 to-indigo-600">
               RESecure
             </span>
           </Link>
-          <p className="text-slate-400 text-sm">
+          <p className="text-slate-600 text-sm">
             AI Screenshot Intelligence Platform • MongoDB Auth
           </p>
         </div>
 
         {/* Card Wrapper */}
-        <div className="bg-slate-900/80 backdrop-blur-xl border border-slate-800 rounded-3xl p-8 shadow-2xl shadow-slate-950/80">
+        <div className="bg-white backdrop-blur-xl border border-slate-200 rounded-3xl p-8 shadow-2xl shadow-slate-200/50">
           {/* Toggle Tabs: Register vs Login */}
-          <div className="flex bg-slate-950 p-1.5 rounded-2xl border border-slate-800/80 mb-6">
+          <div className="flex bg-slate-50 p-1.5 rounded-2xl border border-slate-200 mb-6">
             <button
               type="button"
               onClick={() => handleModeSwitch("login")}
               className={`flex-1 py-2.5 text-xs sm:text-sm font-semibold rounded-xl transition-all ${
                 mode === "login"
                   ? "bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-md shadow-indigo-600/30"
-                  : "text-slate-400 hover:text-slate-200"
+                  : "text-slate-600 hover:text-slate-900"
               }`}
             >
               Sign In
@@ -190,7 +190,7 @@ export default function AuthForm({ initialMode = "login" }) {
               className={`flex-1 py-2.5 text-xs sm:text-sm font-semibold rounded-xl transition-all ${
                 mode === "register"
                   ? "bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-md shadow-indigo-600/30"
-                  : "text-slate-400 hover:text-slate-200"
+                  : "text-slate-600 hover:text-slate-900"
               }`}
             >
               Create Account
@@ -199,7 +199,7 @@ export default function AuthForm({ initialMode = "login" }) {
 
           {/* Alert Banners */}
           {apiError && (
-            <div className="mb-6 p-4 rounded-xl bg-rose-950/80 border border-rose-800/60 text-rose-200 text-xs sm:text-sm flex items-start gap-3 animate-shake">
+            <div className="mb-6 p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs sm:text-sm flex items-start gap-3 animate-shake">
               <span className="text-lg leading-none">⚠️</span>
               <div className="flex-1">
                 <p className="font-semibold">{apiError}</p>
@@ -207,7 +207,7 @@ export default function AuthForm({ initialMode = "login" }) {
                   <button
                     type="button"
                     onClick={() => handleModeSwitch("register")}
-                    className="mt-2 text-xs font-bold text-indigo-300 underline hover:text-white"
+                    className="mt-2 text-xs font-bold text-indigo-600 underline hover:text-indigo-800"
                   >
                     Click here to Register
                   </button>
@@ -216,7 +216,7 @@ export default function AuthForm({ initialMode = "login" }) {
                   <button
                     type="button"
                     onClick={() => handleModeSwitch("login")}
-                    className="mt-2 text-xs font-bold text-indigo-300 underline hover:text-white"
+                    className="mt-2 text-xs font-bold text-indigo-600 underline hover:text-indigo-800"
                   >
                     Click here to Sign In
                   </button>
@@ -226,7 +226,7 @@ export default function AuthForm({ initialMode = "login" }) {
           )}
 
           {apiSuccess && (
-            <div className="mb-6 p-4 rounded-xl bg-emerald-950/80 border border-emerald-800/60 text-emerald-200 text-xs sm:text-sm flex items-center gap-3">
+            <div className="mb-6 p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs sm:text-sm flex items-center gap-3">
               <span className="text-lg">✅</span>
               <p className="font-medium">{apiSuccess}</p>
             </div>
@@ -237,8 +237,8 @@ export default function AuthForm({ initialMode = "login" }) {
             {/* Name Field (Register Mode Only) */}
             {mode === "register" && (
               <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1.5">
-                  Full Name <span className="text-rose-400">*</span>
+                <label className="block text-xs font-medium text-slate-700 mb-1.5">
+                  Full Name <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -248,20 +248,20 @@ export default function AuthForm({ initialMode = "login" }) {
                     setName(e.target.value);
                     if (fieldErrors.name) setFieldErrors({ ...fieldErrors, name: null });
                   }}
-                  className={`w-full bg-slate-950 border ${
-                    fieldErrors.name ? "border-rose-500 focus:ring-rose-500" : "border-slate-800 focus:border-indigo-500"
-                  } rounded-xl px-4 py-3 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-all`}
+                  className={`w-full bg-white border ${
+                    fieldErrors.name ? "border-rose-500 focus:ring-rose-500" : "border-slate-200 focus:border-indigo-500"
+                  } rounded-xl px-4 py-3 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-all`}
                 />
                 {fieldErrors.name && (
-                  <p className="mt-1 text-xs text-rose-400 font-medium">{fieldErrors.name}</p>
+                  <p className="mt-1 text-xs text-rose-500 font-medium">{fieldErrors.name}</p>
                 )}
               </div>
             )}
 
             {/* Email Field */}
             <div>
-              <label className="block text-xs font-medium text-slate-300 mb-1.5">
-                Email Address <span className="text-rose-400">*</span>
+              <label className="block text-xs font-medium text-slate-700 mb-1.5">
+                Email Address <span className="text-rose-500">*</span>
               </label>
               <input
                 type="email"
@@ -271,19 +271,19 @@ export default function AuthForm({ initialMode = "login" }) {
                   setEmail(e.target.value);
                   if (fieldErrors.email) setFieldErrors({ ...fieldErrors, email: null });
                 }}
-                className={`w-full bg-slate-950 border ${
-                  fieldErrors.email ? "border-rose-500 focus:ring-rose-500" : "border-slate-800 focus:border-indigo-500"
-                } rounded-xl px-4 py-3 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-all`}
+                className={`w-full bg-white border ${
+                  fieldErrors.email ? "border-rose-500 focus:ring-rose-500" : "border-slate-200 focus:border-indigo-500"
+                } rounded-xl px-4 py-3 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-all`}
               />
               {fieldErrors.email && (
-                <p className="mt-1 text-xs text-rose-400 font-medium">{fieldErrors.email}</p>
+                <p className="mt-1 text-xs text-rose-500 font-medium">{fieldErrors.email}</p>
               )}
             </div>
 
             {/* Password Field */}
             <div>
-              <label className="block text-xs font-medium text-slate-300 mb-1.5">
-                Password <span className="text-rose-400">*</span>
+              <label className="block text-xs font-medium text-slate-700 mb-1.5">
+                Password <span className="text-rose-500">*</span>
               </label>
               <div className="relative">
                 <input
@@ -294,29 +294,29 @@ export default function AuthForm({ initialMode = "login" }) {
                     setPassword(e.target.value);
                     if (fieldErrors.password) setFieldErrors({ ...fieldErrors, password: null });
                   }}
-                  className={`w-full bg-slate-950 border ${
-                    fieldErrors.password ? "border-rose-500 focus:ring-rose-500" : "border-slate-800 focus:border-indigo-500"
-                  } rounded-xl px-4 py-3 pr-11 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-all`}
+                  className={`w-full bg-white border ${
+                    fieldErrors.password ? "border-rose-500 focus:ring-rose-500" : "border-slate-200 focus:border-indigo-500"
+                  } rounded-xl px-4 py-3 pr-11 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-all`}
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 text-xs px-1.5 py-1 rounded transition-colors"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-700 text-xs px-1.5 py-1 rounded transition-colors"
                   tabIndex={-1}
                 >
                   {showPassword ? "Hide" : "Show"}
                 </button>
               </div>
               {fieldErrors.password && (
-                <p className="mt-1 text-xs text-rose-400 font-medium">{fieldErrors.password}</p>
+                <p className="mt-1 text-xs text-rose-500 font-medium">{fieldErrors.password}</p>
               )}
             </div>
 
             {/* Confirm Password Field (Register Mode Only) */}
             {mode === "register" && (
               <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1.5">
-                  Confirm Password <span className="text-rose-400">*</span>
+                <label className="block text-xs font-medium text-slate-700 mb-1.5">
+                  Confirm Password <span className="text-rose-500">*</span>
                 </label>
                 <div className="relative">
                   <input
@@ -328,21 +328,21 @@ export default function AuthForm({ initialMode = "login" }) {
                       if (fieldErrors.confirmPassword)
                         setFieldErrors({ ...fieldErrors, confirmPassword: null });
                     }}
-                    className={`w-full bg-slate-950 border ${
-                      fieldErrors.confirmPassword ? "border-rose-500 focus:ring-rose-500" : "border-slate-800 focus:border-indigo-500"
-                    } rounded-xl px-4 py-3 pr-11 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-all`}
+                    className={`w-full bg-white border ${
+                      fieldErrors.confirmPassword ? "border-rose-500 focus:ring-rose-500" : "border-slate-200 focus:border-indigo-500"
+                    } rounded-xl px-4 py-3 pr-11 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-all`}
                   />
                   <button
                     type="button"
                     onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 text-xs px-1.5 py-1 rounded transition-colors"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-700 text-xs px-1.5 py-1 rounded transition-colors"
                     tabIndex={-1}
                   >
                     {showConfirmPassword ? "Hide" : "Show"}
                   </button>
                 </div>
                 {fieldErrors.confirmPassword && (
-                  <p className="mt-1 text-xs text-rose-400 font-medium">
+                  <p className="mt-1 text-xs text-rose-500 font-medium">
                     {fieldErrors.confirmPassword}
                   </p>
                 )}
@@ -370,14 +370,14 @@ export default function AuthForm({ initialMode = "login" }) {
           </form>
 
           {/* Footer toggle prompt */}
-          <div className="mt-6 pt-6 border-t border-slate-800/80 text-center text-xs text-slate-400">
+          <div className="mt-6 pt-6 border-t border-slate-200 text-center text-xs text-slate-600">
             {mode === "login" ? (
               <p>
                 Don't have an account yet?{" "}
                 <button
                   type="button"
                   onClick={() => handleModeSwitch("register")}
-                  className="text-indigo-400 font-semibold hover:underline hover:text-indigo-300"
+                  className="text-indigo-600 font-semibold hover:underline hover:text-indigo-700"
                 >
                   Create one now
                 </button>
@@ -388,7 +388,7 @@ export default function AuthForm({ initialMode = "login" }) {
                 <button
                   type="button"
                   onClick={() => handleModeSwitch("login")}
-                  className="text-indigo-400 font-semibold hover:underline hover:text-indigo-300"
+                  className="text-indigo-600 font-semibold hover:underline hover:text-indigo-700"
                 >
                   Sign in to your account
                 </button>
