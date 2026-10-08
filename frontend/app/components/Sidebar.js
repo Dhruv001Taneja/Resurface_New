@@ -20,7 +20,7 @@ export default function Sidebar({
     { name: "Action Center", icon: "⚡", href: "/dashboard" },
     { name: "Calendar", icon: "📅", href: "/dashboard" },
     { name: "Reminders", icon: "⏰", href: "/dashboard" },
-    { name: "Vault", icon: "🔒", href: "/dashboard" },
+    { name: "Vault", icon: "🔒", href: "/vault" },
   ];
 
   const secondaryNavItems = [
@@ -38,9 +38,8 @@ export default function Sidebar({
   return (
     <>
       <aside
-        className={`${
-          mobileMenuOpen ? "translate-x-0" : "-translate-x-full"
-        } md:translate-x-0 fixed md:static inset-y-0 left-0 z-30 w-64 bg-white border-r border-gray-200 flex flex-col justify-between transition-transform duration-200 ease-in-out shrink-0`}
+        className={`${mobileMenuOpen ? "translate-x-0" : "-translate-x-full"
+          } md:translate-x-0 fixed md:static inset-y-0 left-0 z-30 w-64 bg-white border-r border-gray-200 flex flex-col justify-between transition-transform duration-200 ease-in-out shrink-0`}
       >
         <div className="p-4 overflow-y-auto">
           <Link
@@ -60,11 +59,10 @@ export default function Sidebar({
                   key={item.name}
                   href={item.href}
                   onClick={() => setMobileMenuOpen?.(false)}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                    active
-                      ? "bg-indigo-50 text-indigo-600 font-semibold border-r-4 border-indigo-600"
-                      : "text-gray-700 hover:bg-gray-100 hover:text-gray-900"
-                  }`}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${active
+                    ? "bg-indigo-50 text-indigo-600 font-semibold border-r-4 border-indigo-600"
+                    : "text-gray-700 hover:bg-gray-100 hover:text-gray-900"
+                    }`}
                 >
                   <span className="text-base">{item.icon}</span>
                   <span>{item.name}</span>
@@ -83,11 +81,10 @@ export default function Sidebar({
                   key={item.name}
                   href={item.href}
                   onClick={() => setMobileMenuOpen?.(false)}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                    active
-                      ? "bg-indigo-50 text-indigo-600 font-semibold"
-                      : "text-gray-700 hover:bg-gray-100 hover:text-gray-900"
-                  }`}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${active
+                    ? "bg-indigo-50 text-indigo-600 font-semibold"
+                    : "text-gray-700 hover:bg-gray-100 hover:text-gray-900"
+                    }`}
                 >
                   <span className="text-base">{item.icon}</span>
                   <span className={item.name === "Help" ? "text-rose-600 font-semibold" : ""}>

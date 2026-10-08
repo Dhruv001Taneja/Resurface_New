@@ -205,4 +205,68 @@ export async function deleteScreenshotApi(id) {
 
   return data;
 }
+/**
+ * Fetch screenshots that are stored in Vault
+ */
+export async function fetchVaultApi(params = {}) {
+  const authToken = getStoredToken();
 
+  if (!authToken) {
+    throw new Error('Not authenticated');
+  }
+
+  const query = new URLSearchParams(params).toString();
+
+  const response = await fetch(
+    `${API_BASE_URL}/screenshots/vault?${query}`,
+    {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${authToken}`,
+        'Content-Type': 'application/json',
+      },
+    }
+  );
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(
+      data.error || data.message || 'Failed to fetch Vault items'
+    );
+  }
+
+  return data;
+}
+
+/**
+ * Move an existing screenshot into or out of Vault
+ */
+export async function toggleVaultApi(id) {
+  const authToken = getStoredToken();
+
+  if (!authToken) {
+    throw new Error('Not authenticated');
+  }
+
+  const response = await fetch(
+    `${API_BASE_URL}/screenshots/${id}/vault`,
+    {
+      method: 'PATCH',
+      headers: {
+        'Authorization': `Bearer ${authToken}`,
+        'Content-Type': 'application/json',
+      },
+    }
+  );
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(
+      data.error || data.message || 'Failed to update Vault status'
+    );
+  }
+
+  return data;
+}

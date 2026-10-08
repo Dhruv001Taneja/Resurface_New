@@ -227,6 +227,25 @@ const screenshotSchema = new mongoose.Schema(
       default: null,
       index: true,
     },
+    isSensitive: {
+      type: Boolean,
+      default: false,
+    },
+
+    sensitiveType: {
+      type: String,
+      enum: [
+        'password',
+        'card',
+        'bank',
+        'government_id',
+        'authentication',
+        'personal',
+        'other',
+        'none',
+      ],
+      default: 'none',
+    },
   },
   {
     timestamps: true,
