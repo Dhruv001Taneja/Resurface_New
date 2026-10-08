@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata = {
-  title: "RESecure — AI Screenshot Intelligence Platform",
+  title: "ReSurface — AI Screenshot Intelligence Platform",
   description: "Turn your raw screenshots into structured knowledge, automated reminders, instant search, and intelligent insights.",
 };
 

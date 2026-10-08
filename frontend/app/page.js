@@ -48,7 +48,7 @@ export default function Home() {
               RE
             </div>
             <span className="font-bold text-xl tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-indigo-700 via-purple-700 to-indigo-600">
-              RESecure
+              ReSurface
             </span>
           </div>
 
@@ -80,7 +80,7 @@ export default function Home() {
         </h1>
 
         <p className="text-lg md:text-xl text-slate-600 max-w-2xl text-balance mb-10 leading-relaxed">
-          RESecure transforms scattered receipts, chat logs, tickets, and code snippets into a searchable, automated, and secure knowledge base.
+          ReSurface transforms scattered receipts, chat logs, tickets, and code snippets into a searchable, automated, and secure knowledge base.
         </p>
 
         <div className="flex flex-col sm:flex-row items-center gap-4 mb-20 w-full max-w-sm sm:max-w-none justify-center">
@@ -134,7 +134,7 @@ export default function Home() {
 
       {/* Footer */}
       <footer className="border-t border-slate-200 py-8 text-center text-xs text-slate-500">
-        <p>RESecure — AI Screenshot Intelligence Platform (ASIP) • College Software Project</p>
+        <p>ReSurface — AI Screenshot Intelligence Platform (ASIP) • College Software Project</p>
       </footer>
     </div>
   );

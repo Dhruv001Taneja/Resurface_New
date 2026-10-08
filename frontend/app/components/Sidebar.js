@@ -45,7 +45,7 @@ export default function Sidebar({
             href="/dashboard"
             className="block px-3 py-2 font-extrabold text-xl tracking-tight text-gray-900 hover:text-indigo-600 transition-colors"
           >
-            RESecure
+            ReSurface
           </Link>
 
           <div className="border-t border-gray-200 my-3" />
