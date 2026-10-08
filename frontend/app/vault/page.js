@@ -3,7 +3,14 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../context/AuthContext";
-import { fetchVaultApi, toggleVaultApi } from "../utils/api";
+
+import {
+    fetchVaultApi,
+    toggleVaultApi,
+    fetchScreenshotByIdApi,
+} from "../utils/api";
+
+import ScreenshotDetailsModal from "../components/ScreenshotDetailsModal";
 
 export default function VaultPage() {
     const { user, isAuthenticated, isLoading } = useAuth();
@@ -14,6 +21,10 @@ export default function VaultPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
     const [removingId, setRemovingId] = useState(null);
+
+    // Selected screenshot for View modal
+    const [selectedScreenshot, setSelectedScreenshot] = useState(null);
+    const [viewLoading, setViewLoading] = useState(false);
 
     // Load Vault items from backend
     useEffect(() => {
@@ -69,6 +80,39 @@ export default function VaultPage() {
     // Get MongoDB ID
     const getItemId = (item) => {
         return item?._id || item?.id;
+    };
+
+    // =========================================================
+    // VIEW VAULT SCREENSHOT
+    // =========================================================
+
+    const handleViewScreenshot = async (id) => {
+        if (!id) {
+            alert("Screenshot ID not found.");
+            return;
+        }
+
+        try {
+            setViewLoading(true);
+
+            console.log("Opening Vault screenshot:", id);
+
+            const response = await fetchScreenshotByIdApi(id);
+
+            if (response?.data) {
+                setSelectedScreenshot(response.data);
+            } else {
+                throw new Error("Screenshot data was not returned.");
+            }
+        } catch (err) {
+            console.error("Error loading Vault screenshot:", err);
+
+            alert(
+                err.message || "Failed to load protected screenshot."
+            );
+        } finally {
+            setViewLoading(false);
+        }
     };
 
     // Get title from screenshot
@@ -196,7 +240,9 @@ export default function VaultPage() {
     if (isLoading) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-gray-50">
-                <div className="text-gray-500">Loading Vault...</div>
+                <div className="text-gray-500">
+                    Loading Vault...
+                </div>
             </div>
         );
     }
@@ -229,9 +275,12 @@ export default function VaultPage() {
 
     return (
         <div className="min-h-screen bg-gray-50 text-gray-900 font-sans">
+
             {/* HEADER */}
             <header className="sticky top-0 z-40 bg-white border-b border-gray-200 px-4 sm:px-8 py-4 flex items-center justify-between shadow-sm">
+
                 <div className="flex items-center gap-3">
+
                     <button
                         onClick={() => router.push("/dashboard")}
                         className="p-2 rounded-lg hover:bg-gray-100 transition"
@@ -248,17 +297,21 @@ export default function VaultPage() {
                             Your private information
                         </p>
                     </div>
+
                 </div>
 
                 <div className="text-sm text-gray-600 hidden sm:block">
                     {user?.email}
                 </div>
+
             </header>
 
             {/* MAIN */}
             <main className="max-w-7xl mx-auto p-4 sm:p-8">
+
                 {/* INTRO */}
                 <section className="mb-8">
+
                     <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
                         Your Secure Vault 🔐
                     </h2>
@@ -267,11 +320,14 @@ export default function VaultPage() {
                         Sensitive screenshots detected from your existing uploads are
                         stored here securely.
                     </p>
+
                 </section>
 
                 {/* SEARCH */}
                 <div className="flex flex-col sm:flex-row gap-3 mb-8">
+
                     <div className="relative flex-1">
+
                         <span className="absolute left-4 top-3 text-gray-400">
                             🔍
                         </span>
@@ -283,11 +339,14 @@ export default function VaultPage() {
                             onChange={(e) => setSearchQuery(e.target.value)}
                             className="w-full bg-white border border-gray-300 rounded-xl py-3 pl-11 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                         />
+
                     </div>
+
                 </div>
 
                 {/* CATEGORY CARDS */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-10">
+
                     <CategoryCard
                         icon="🔑"
                         title="Passwords"
@@ -311,14 +370,20 @@ export default function VaultPage() {
                         title="Documents"
                         count={`${documentCount} items`}
                     />
+
                 </div>
 
                 {/* SECURITY NOTICE */}
                 <div className="bg-indigo-50 border border-indigo-200 rounded-2xl p-5 mb-8">
+
                     <div className="flex items-start gap-3">
-                        <span className="text-2xl">🛡️</span>
+
+                        <span className="text-2xl">
+                            🛡️
+                        </span>
 
                         <div>
+
                             <h3 className="font-bold text-indigo-900">
                                 Your information is protected
                             </h3>
@@ -328,17 +393,25 @@ export default function VaultPage() {
                                 already uploaded to RESecure can appear here. No second upload
                                 is required.
                             </p>
+
                         </div>
+
                     </div>
+
                 </div>
 
                 {/* ERROR */}
                 {error && (
                     <div className="bg-red-50 border border-red-200 rounded-2xl p-5 mb-8">
+
                         <div className="flex items-start gap-3">
-                            <span className="text-xl">⚠️</span>
+
+                            <span className="text-xl">
+                                ⚠️
+                            </span>
 
                             <div>
+
                                 <h3 className="font-bold text-red-900">
                                     Failed to load Vault
                                 </h3>
@@ -346,15 +419,21 @@ export default function VaultPage() {
                                 <p className="text-sm text-red-700 mt-1">
                                     {error}
                                 </p>
+
                             </div>
+
                         </div>
+
                     </div>
                 )}
 
                 {/* RECENT ITEMS */}
                 <section>
+
                     <div className="flex items-center justify-between mb-5">
+
                         <div>
+
                             <h2 className="text-xl font-extrabold">
                                 Recent Items
                             </h2>
@@ -362,17 +441,23 @@ export default function VaultPage() {
                             <p className="text-sm text-gray-500 mt-1">
                                 Your recently protected screenshots
                             </p>
+
                         </div>
 
                         <span className="text-sm text-gray-500">
                             {filteredItems.length} items
                         </span>
+
                     </div>
 
                     {/* LOADING */}
                     {loading ? (
+
                         <div className="bg-white border border-gray-200 rounded-2xl p-10 text-center">
-                            <div className="text-3xl mb-3">🔄</div>
+
+                            <div className="text-3xl mb-3">
+                                🔄
+                            </div>
 
                             <h3 className="font-bold text-lg">
                                 Loading Vault...
@@ -381,22 +466,32 @@ export default function VaultPage() {
                             <p className="text-sm text-gray-500 mt-1">
                                 Fetching your protected screenshots.
                             </p>
+
                         </div>
+
                     ) : filteredItems.length === 0 ? (
+
                         /* EMPTY STATE */
                         <div className="bg-white border border-gray-200 rounded-2xl p-10 text-center">
-                            <div className="text-5xl mb-4">🔐</div>
+
+                            <div className="text-5xl mb-4">
+                                🔐
+                            </div>
 
                             <h3 className="font-bold text-lg">
+
                                 {searchQuery
                                     ? "No matching items found"
                                     : "Your Vault is empty"}
+
                             </h3>
 
                             <p className="text-sm text-gray-500 mt-2 max-w-md mx-auto">
+
                                 {searchQuery
                                     ? "Try a different search."
                                     : "When a screenshot contains sensitive information, it can be moved into your Vault without uploading the image again."}
+
                             </p>
 
                             {!searchQuery && (
@@ -407,11 +502,16 @@ export default function VaultPage() {
                                     View Screenshots
                                 </button>
                             )}
+
                         </div>
+
                     ) : (
+
                         /* ITEMS */
                         <div className="space-y-4">
+
                             {filteredItems.map((item) => (
+
                                 <VaultItem
                                     key={getItemId(item)}
                                     item={item}
@@ -419,27 +519,73 @@ export default function VaultPage() {
                                     category={getCategory(item)}
                                     tags={getTags(item)}
                                     imageUrl={getImageUrl(item)}
-                                    updated={formatDate(item.updatedAt || item.createdAt)}
-                                    removing={removingId === getItemId(item)}
-                                    onRemove={() =>
-                                        handleRemoveFromVault(getItemId(item))
+                                    updated={formatDate(
+                                        item.updatedAt || item.createdAt
+                                    )}
+                                    removing={
+                                        removingId === getItemId(item)
                                     }
-                                    onOpen={() => {
-                                        const id = getItemId(item);
+                                    onRemove={() =>
+                                        handleRemoveFromVault(
+                                            getItemId(item)
+                                        )
+                                    }
 
-                                        if (id) {
-                                            router.push(`/screenshots?id=${id}`);
-                                        }
-                                    }}
+                                    // IMPORTANT:
+                                    // Open the exact Vault screenshot
+                                    // instead of navigating to /screenshots
+                                    onOpen={() =>
+                                        handleViewScreenshot(
+                                            getItemId(item)
+                                        )
+                                    }
                                 />
+
                             ))}
+
                         </div>
+
                     )}
+
                 </section>
+
             </main>
+
+            {/* VIEW LOADING */}
+            {viewLoading && (
+                <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/30 backdrop-blur-sm">
+
+                    <div className="bg-white rounded-2xl px-8 py-6 shadow-xl text-center">
+
+                        <div className="text-3xl mb-3">
+                            🔐
+                        </div>
+
+                        <h3 className="font-bold text-gray-900">
+                            Opening protected screenshot...
+                        </h3>
+
+                        <p className="text-sm text-gray-500 mt-1">
+                            Please wait.
+                        </p>
+
+                    </div>
+
+                </div>
+            )}
+
+            {/* SCREENSHOT DETAILS MODAL */}
+            {selectedScreenshot && (
+                <ScreenshotDetailsModal
+                    screenshot={selectedScreenshot}
+                    onClose={() => setSelectedScreenshot(null)}
+                />
+            )}
+
         </div>
     );
 }
+
 
 /* =========================================================
    CATEGORY CARD
@@ -448,7 +594,9 @@ export default function VaultPage() {
 function CategoryCard({ icon, title, count }) {
     return (
         <div className="bg-white border border-gray-200 rounded-2xl p-5 hover:border-indigo-300 hover:shadow-md transition">
+
             <div className="flex items-center justify-between">
+
                 <div className="text-3xl">
                     {icon}
                 </div>
@@ -456,6 +604,7 @@ function CategoryCard({ icon, title, count }) {
                 <span className="text-xs font-semibold bg-gray-100 text-gray-600 px-2.5 py-1 rounded-full">
                     {count}
                 </span>
+
             </div>
 
             <h3 className="font-bold text-lg mt-4">
@@ -465,9 +614,11 @@ function CategoryCard({ icon, title, count }) {
             <p className="text-sm text-gray-500 mt-1">
                 Securely stored
             </p>
+
         </div>
     );
 }
+
 
 /* =========================================================
    VAULT ITEM
@@ -484,26 +635,39 @@ function VaultItem({
     onRemove,
     onOpen,
 }) {
+
     return (
         <div className="bg-white border border-gray-200 rounded-2xl p-5 hover:shadow-md transition">
+
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-5">
+
                 {/* LEFT */}
                 <div className="flex items-center gap-4 min-w-0">
+
                     {/* IMAGE */}
                     <div className="h-16 w-16 rounded-xl bg-indigo-50 border border-indigo-100 overflow-hidden flex items-center justify-center shrink-0">
+
                         {imageUrl ? (
+
                             <img
                                 src={imageUrl}
                                 alt="Protected screenshot"
                                 className="w-full h-full object-cover"
                             />
+
                         ) : (
-                            <span className="text-2xl">🔒</span>
+
+                            <span className="text-2xl">
+                                🔒
+                            </span>
+
                         )}
+
                     </div>
 
                     {/* DETAILS */}
                     <div className="min-w-0">
+
                         <h3 className="font-bold text-gray-900 truncate">
                             {title}
                         </h3>
@@ -513,23 +677,33 @@ function VaultItem({
                         </p>
 
                         {tags.length > 0 && (
+
                             <div className="flex flex-wrap gap-1.5 mt-2">
+
                                 {tags.slice(0, 3).map((tag, index) => (
+
                                     <span
                                         key={`${tag}-${index}`}
                                         className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-md"
                                     >
                                         {tag}
                                     </span>
+
                                 ))}
+
                             </div>
+
                         )}
+
                     </div>
+
                 </div>
 
                 {/* RIGHT */}
                 <div className="flex flex-col sm:items-end gap-3 shrink-0">
+
                     <div className="flex items-center gap-2">
+
                         <span className="text-sm font-semibold text-gray-700">
                             🔒 Protected
                         </span>
@@ -537,16 +711,20 @@ function VaultItem({
                         <span className="text-xs text-gray-400">
                             {updated}
                         </span>
+
                     </div>
 
                     <div className="flex items-center gap-2">
+
+                        {/* VIEW */}
                         <button
                             onClick={onOpen}
-                            className="px-4 py-2 rounded-lg border border-gray-300 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition"
+                            className="px-4 py-2 rounded-lg border border-gray-300 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition disabled:opacity-50"
                         >
                             View
                         </button>
 
+                        {/* REMOVE */}
                         <button
                             onClick={onRemove}
                             disabled={removing}
@@ -554,9 +732,13 @@ function VaultItem({
                         >
                             {removing ? "Removing..." : "Remove"}
                         </button>
+
                     </div>
+
                 </div>
+
             </div>
+
         </div>
     );
 }
