@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../context/AuthContext";
-import { fetchScreenshotsApi, deleteScreenshotApi, createCalendarEventApi } from "../utils/api";
+import { fetchScreenshotsApi, deleteScreenshotApi, createCalendarEventApi, updateExtractedDateApi, dismissActionItemApi } from "../utils/api";
 import Sidebar from "../components/Sidebar";
 import ScreenshotDetailsModal from "../components/ScreenshotDetailsModal";
 
@@ -19,6 +19,9 @@ export default function ActionCenter() {
   const [filter, setFilter] = useState("All"); 
   const [selectedScreenshot, setSelectedScreenshot] = useState(null);
   const [addedToCalendar, setAddedToCalendar] = useState({});
+  const [notification, setNotification] = useState(null);
+  const [editingDateId, setEditingDateId] = useState(null);
+  const [editDateValue, setEditDateValue] = useState("");
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -50,22 +53,35 @@ export default function ActionCenter() {
       setScreenshots((prev) => prev.filter((s) => s._id !== id && s.id !== id));
       setSelectedScreenshot(null);
     } catch (err) {
-      alert(`Failed to delete screenshot: ${err.message}`);
+      showNotification('error', `Failed to delete screenshot: ${err.message}`);
     }
   };
 
   const handleReminder = () => {
-    alert("Reminder integration not yet implemented.");
+    showNotification('error', "Reminder integration not yet implemented.");
+  };
+
+  const showNotification = (type, message) => {
+    setNotification({ type, message });
+    setTimeout(() => setNotification(null), 5000);
   };
 
   const handleCalendar = async (item) => {
     try {
       let title = item.task || item.event || item.context || 'New Event';
       let dateStr = item.dueDate || item.date || item.dateText;
-      let date = dateStr ? new Date(dateStr) : new Date();
-      if (isNaN(date.getTime())) {
-         date = new Date(); // fallback if parsing fails
+      
+      if (!dateStr) {
+        throw new Error("No date found for this item. Cannot add to calendar.");
       }
+
+      let date = new Date(dateStr);
+      if (isNaN(date.getTime())) {
+         throw new Error(`Invalid date format detected: "${dateStr}". Please correct the date before adding.`);
+      }
+
+      // Set to local noon to avoid timezone shift off-by-one errors
+      date.setHours(12, 0, 0, 0);
 
       await createCalendarEventApi({
         title,
@@ -77,19 +93,96 @@ export default function ActionCenter() {
         sourceScreenshotId: item.source?._id
       });
       setAddedToCalendar(prev => ({ ...prev, [item.id]: true }));
-      alert("Added to calendar successfully!");
+      showNotification('success', `"${title}" was added to your calendar.`);
     } catch (err) {
       if (err.status === 409) {
         setAddedToCalendar(prev => ({ ...prev, [item.id]: true }));
-        alert("Already added to Calendar.");
+        showNotification('success', `"${item.task || item.event || item.context || 'Item'}" is already in your calendar.`);
       } else {
-        alert(`Failed to add to calendar: ${err.message}`);
+        showNotification('error', err.message);
       }
     }
   };
   
-  const handleDismiss = () => {
-     alert("Dismiss functionality is not yet implemented in the data model.");
+  const handleEditDate = (item) => {
+    let current = item.dueDate || item.date || item.dateText || "";
+    let d = new Date(current);
+    if (!isNaN(d.getTime())) {
+      d.setHours(12, 0, 0, 0); // avoid tz shift
+      setEditDateValue(d.toISOString().split('T')[0]);
+    } else {
+      setEditDateValue("");
+    }
+    setEditingDateId(item.id);
+  };
+
+  const handleSaveDate = async (item) => {
+    if (!editDateValue) {
+      showNotification('error', 'Please select a date.');
+      return;
+    }
+    try {
+      await updateExtractedDateApi(item.source._id, {
+        category: item.itemCategory,
+        itemIndex: item.itemIndex,
+        newDate: editDateValue,
+      });
+
+      // Update the local state so it persists across re-renders
+      setScreenshots(prev => prev.map(s => {
+        if (s._id === item.source._id) {
+          let sCopy = JSON.parse(JSON.stringify(s)); // deep copy safely
+          if (item.itemCategory === 'extractedTasks') {
+            sCopy.aiAnalysis.extractedTasks[item.itemIndex].dueDate = editDateValue;
+          } else if (item.itemCategory === 'actionItems') {
+            sCopy.aiAnalysis.actionItems[item.itemIndex].dueDate = editDateValue;
+          } else if (item.itemCategory === 'extractedEvents') {
+            sCopy.aiAnalysis.extractedEvents[item.itemIndex].date = editDateValue;
+          } else if (item.itemCategory === 'extractedDates') {
+            sCopy.aiAnalysis.extractedDates[item.itemIndex].dateText = editDateValue;
+          }
+          return sCopy;
+        }
+        return s;
+      }));
+      
+      setEditingDateId(null);
+      showNotification('success', 'Date updated successfully.');
+    } catch (err) {
+      showNotification('error', `Failed to update date: ${err.message}`);
+    }
+  };
+
+  const handleDismiss = async (item) => {
+    try {
+      await dismissActionItemApi(item.source._id, {
+        category: item.itemCategory,
+        itemIndex: item.itemIndex,
+      });
+
+      // Update local state to mark as dismissed
+      setScreenshots(prev => prev.map(s => {
+        if (s._id === item.source._id) {
+          let sCopy = JSON.parse(JSON.stringify(s));
+          if (item.itemCategory === 'extractedTasks') {
+            sCopy.aiAnalysis.extractedTasks[item.itemIndex].isDismissed = true;
+          } else if (item.itemCategory === 'actionItems') {
+            sCopy.aiAnalysis.actionItems[item.itemIndex].isDismissed = true;
+          } else if (item.itemCategory === 'extractedEvents') {
+            sCopy.aiAnalysis.extractedEvents[item.itemIndex].isDismissed = true;
+          } else if (item.itemCategory === 'extractedDates') {
+            sCopy.aiAnalysis.extractedDates[item.itemIndex].isDismissed = true;
+          }
+          return sCopy;
+        }
+        return s;
+      }));
+      
+      let title = item.task || item.event || item.context || 'Item';
+      showNotification('success', `"${title}" was removed from your Action Center.`);
+    } catch (err) {
+      showNotification('error', `Failed to dismiss item: ${err.message}`);
+    }
   };
 
   // Derive items
@@ -101,28 +194,31 @@ export default function ActionCenter() {
     const pipeline = s.processingPipeline;
     if (pipeline && (pipeline.overall === "processing" || pipeline.overall === "failed")) return;
     
-    if (s.aiAnalysis?.extractedTasks) {
-       s.aiAnalysis.extractedTasks.forEach((t, i) => allTasks.push({ ...t, type: 'task', id: `t-${s._id}-${i}`, source: s }));
-    } else if (s.aiAnalysis?.actionItems) { 
-       s.aiAnalysis.actionItems.forEach((t, i) => allTasks.push({ task: t.description, dueDate: t.dueDate, type: 'task', id: `t-${s._id}-${i}`, source: s }));
+    if (s.aiAnalysis?.extractedTasks && s.aiAnalysis.extractedTasks.length > 0) {
+       s.aiAnalysis.extractedTasks.forEach((t, i) => { if(!t.isDismissed) allTasks.push({ ...t, type: 'task', id: `t-${s._id}-${i}`, source: s, itemCategory: 'extractedTasks', itemIndex: i }) });
+    } else if (s.aiAnalysis?.actionItems && s.aiAnalysis.actionItems.length > 0) { 
+       s.aiAnalysis.actionItems.forEach((t, i) => { if(!t.isDismissed) allTasks.push({ task: t.description, dueDate: t.dueDate, type: 'task', id: `t-${s._id}-${i}`, source: s, itemCategory: 'actionItems', itemIndex: i }) });
     }
 
     if (s.aiAnalysis?.extractedEvents) {
-       s.aiAnalysis.extractedEvents.forEach((e, i) => allEvents.push({ ...e, type: 'event', id: `e-${s._id}-${i}`, source: s }));
+       s.aiAnalysis.extractedEvents.forEach((e, i) => { if(!e.isDismissed) allEvents.push({ ...e, type: 'event', id: `e-${s._id}-${i}`, source: s, itemCategory: 'extractedEvents', itemIndex: i }) });
     }
 
     if (s.aiAnalysis?.extractedDates) {
-       s.aiAnalysis.extractedDates.forEach((d, i) => allDates.push({ ...d, type: 'date', id: `d-${s._id}-${i}`, source: s }));
+       s.aiAnalysis.extractedDates.forEach((d, i) => { if(!d.isDismissed) allDates.push({ ...d, type: 'date', id: `d-${s._id}-${i}`, source: s, itemCategory: 'extractedDates', itemIndex: i }) });
     }
   });
 
   const totalItems = allTasks.length + allEvents.length + allDates.length;
 
   const getFilteredItems = () => {
-    if (filter === "Tasks") return allTasks;
-    if (filter === "Events") return allEvents;
-    if (filter === "Important Dates") return allDates;
-    return [...allTasks, ...allEvents, ...allDates];
+    let items = [];
+    if (filter === "Tasks") items = allTasks;
+    else if (filter === "Events") items = allEvents;
+    else if (filter === "Important Dates") items = allDates;
+    else items = [...allTasks, ...allEvents, ...allDates];
+    
+    return items.filter(item => !addedToCalendar[item.id]);
   };
 
   const userName = user?.name || user?.email?.split("@")[0] || "User";
@@ -187,6 +283,18 @@ export default function ActionCenter() {
             </p>
           </div>
 
+          {notification && (
+            <div className={`mb-6 p-4 rounded-xl shadow-sm border flex items-start gap-3 transition-all ${
+              notification.type === 'success' ? 'bg-green-50 border-green-200 text-green-800' : 'bg-red-50 border-red-200 text-red-800'
+            }`}>
+              <span className="text-lg mt-0.5">{notification.type === 'success' ? '✓' : '⚠️'}</span>
+              <div>
+                <h4 className="font-bold text-sm mb-0.5">{notification.type === 'success' ? 'Success' : 'Error'}</h4>
+                <p className="text-sm font-medium">{notification.message}</p>
+              </div>
+            </div>
+          )}
+
           {/* SUMMARY CARDS */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
             <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-xs text-center">
@@ -242,19 +350,30 @@ export default function ActionCenter() {
                       </div>
                       <h3 className="text-lg font-bold text-gray-900 mb-2">{item.task}</h3>
                       <div className="flex items-center gap-3 text-sm text-gray-700 mb-4 font-medium">
-                        <span className="flex items-center gap-1">🗓️ Due: {item.dueDate || "No date"}</span>
-                        {item.priority && <span className="flex items-center gap-1">⚡ Priority: {item.priority}</span>}
+                        {editingDateId === item.id ? (
+                          <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-lg p-2 shadow-sm w-full max-w-sm">
+                            <input type="date" value={editDateValue} onChange={e => setEditDateValue(e.target.value)} className="border border-gray-300 rounded px-2 py-1 text-sm outline-none focus:border-indigo-500" />
+                            <button onClick={() => handleSaveDate(item)} className="px-3 py-1 bg-indigo-600 text-white rounded text-xs font-semibold hover:bg-indigo-700">Save Date</button>
+                            <button onClick={() => setEditingDateId(null)} className="px-3 py-1 bg-gray-100 text-gray-700 rounded text-xs font-semibold hover:bg-gray-200">Cancel</button>
+                          </div>
+                        ) : (
+                          <>
+                            <span className="flex items-center gap-1">🗓️ Due: {item.dueDate || "No date"}</span>
+                            {item.priority && <span className="flex items-center gap-1">⚡ Priority: {item.priority}</span>}
+                          </>
+                        )}
                       </div>
                       <div className="text-xs text-gray-500 mb-4 font-mono">Detected from: Screenshot</div>
                       <div className="flex flex-wrap gap-2">
                         <button onClick={() => setSelectedScreenshot(item.source)} className="px-3 py-1.5 bg-white border border-gray-300 text-gray-700 rounded-lg text-xs font-semibold hover:bg-gray-50 transition-colors">View Source</button>
+                        <button onClick={() => handleEditDate(item)} className="px-3 py-1.5 bg-white border border-gray-300 text-gray-700 rounded-lg text-xs font-semibold hover:bg-gray-50 transition-colors">Edit Date</button>
                         <button onClick={handleReminder} className="px-3 py-1.5 bg-white border border-gray-300 text-gray-700 rounded-lg text-xs font-semibold hover:bg-gray-50 transition-colors">🔔 Set Reminder</button>
                         {addedToCalendar[item.id] ? (
                           <span className="px-3 py-1.5 bg-green-50 border border-green-200 text-green-700 rounded-lg text-xs font-semibold">✅ Added to Calendar</span>
                         ) : (
                           <button onClick={() => handleCalendar(item)} className="px-3 py-1.5 bg-white border border-gray-300 text-gray-700 rounded-lg text-xs font-semibold hover:bg-gray-50 transition-colors">📅 Add to Calendar</button>
                         )}
-                        <button onClick={handleDismiss} className="px-3 py-1.5 bg-white border border-gray-300 text-gray-500 hover:text-rose-600 rounded-lg text-xs font-semibold hover:bg-rose-50 transition-colors ml-auto">Dismiss</button>
+                        <button onClick={() => handleDismiss(item)} className="px-3 py-1.5 bg-white border border-gray-300 text-gray-500 hover:text-rose-600 rounded-lg text-xs font-semibold hover:bg-rose-50 transition-colors ml-auto">Dismiss</button>
                       </div>
                     </div>
                   );
@@ -270,20 +389,31 @@ export default function ActionCenter() {
                       </div>
                       <h3 className="text-lg font-bold text-gray-900 mb-2">{item.event}</h3>
                       <div className="flex flex-wrap items-center gap-4 text-sm text-gray-700 mb-4 font-medium">
-                        {item.date && <span className="flex items-center gap-1">🗓️ {item.date}</span>}
-                        {item.time && <span className="flex items-center gap-1">⏰ {item.time}</span>}
-                        {item.location && <span className="flex items-center gap-1">📍 {item.location}</span>}
+                        {editingDateId === item.id ? (
+                          <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-lg p-2 shadow-sm w-full max-w-sm">
+                            <input type="date" value={editDateValue} onChange={e => setEditDateValue(e.target.value)} className="border border-gray-300 rounded px-2 py-1 text-sm outline-none focus:border-indigo-500" />
+                            <button onClick={() => handleSaveDate(item)} className="px-3 py-1 bg-indigo-600 text-white rounded text-xs font-semibold hover:bg-indigo-700">Save Date</button>
+                            <button onClick={() => setEditingDateId(null)} className="px-3 py-1 bg-gray-100 text-gray-700 rounded text-xs font-semibold hover:bg-gray-200">Cancel</button>
+                          </div>
+                        ) : (
+                          <>
+                            {item.date && <span className="flex items-center gap-1">🗓️ {item.date}</span>}
+                            {item.time && <span className="flex items-center gap-1">⏰ {item.time}</span>}
+                            {item.location && <span className="flex items-center gap-1">📍 {item.location}</span>}
+                          </>
+                        )}
                       </div>
                       <div className="text-xs text-gray-500 mb-4 font-mono">Detected from: Screenshot</div>
                       <div className="flex flex-wrap gap-2">
                         <button onClick={() => setSelectedScreenshot(item.source)} className="px-3 py-1.5 bg-white border border-gray-300 text-gray-700 rounded-lg text-xs font-semibold hover:bg-gray-50 transition-colors">View Source</button>
+                        <button onClick={() => handleEditDate(item)} className="px-3 py-1.5 bg-white border border-gray-300 text-gray-700 rounded-lg text-xs font-semibold hover:bg-gray-50 transition-colors">Edit Date</button>
                         {addedToCalendar[item.id] ? (
                           <span className="px-3 py-1.5 bg-green-50 border border-green-200 text-green-700 rounded-lg text-xs font-semibold">✅ Added to Calendar</span>
                         ) : (
                           <button onClick={() => handleCalendar(item)} className="px-3 py-1.5 bg-white border border-gray-300 text-gray-700 rounded-lg text-xs font-semibold hover:bg-gray-50 transition-colors">📅 Add to Calendar</button>
                         )}
                         <button onClick={handleReminder} className="px-3 py-1.5 bg-white border border-gray-300 text-gray-700 rounded-lg text-xs font-semibold hover:bg-gray-50 transition-colors">🔔 Set Reminder</button>
-                        <button onClick={handleDismiss} className="px-3 py-1.5 bg-white border border-gray-300 text-gray-500 hover:text-rose-600 rounded-lg text-xs font-semibold hover:bg-rose-50 transition-colors ml-auto">Dismiss</button>
+                        <button onClick={() => handleDismiss(item)} className="px-3 py-1.5 bg-white border border-gray-300 text-gray-500 hover:text-rose-600 rounded-lg text-xs font-semibold hover:bg-rose-50 transition-colors ml-auto">Dismiss</button>
                       </div>
                     </div>
                   );
@@ -299,18 +429,27 @@ export default function ActionCenter() {
                       </div>
                       <h3 className="text-lg font-bold text-gray-900 mb-2">{item.context}</h3>
                       <div className="flex flex-wrap items-center gap-3 text-sm text-gray-700 mb-4 font-medium">
-                        <span className="flex items-center gap-1">🗓️ {item.dateText}</span>
+                        {editingDateId === item.id ? (
+                          <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-lg p-2 shadow-sm w-full max-w-sm">
+                            <input type="date" value={editDateValue} onChange={e => setEditDateValue(e.target.value)} className="border border-gray-300 rounded px-2 py-1 text-sm outline-none focus:border-indigo-500" />
+                            <button onClick={() => handleSaveDate(item)} className="px-3 py-1 bg-indigo-600 text-white rounded text-xs font-semibold hover:bg-indigo-700">Save Date</button>
+                            <button onClick={() => setEditingDateId(null)} className="px-3 py-1 bg-gray-100 text-gray-700 rounded text-xs font-semibold hover:bg-gray-200">Cancel</button>
+                          </div>
+                        ) : (
+                          <span className="flex items-center gap-1">🗓️ {item.dateText}</span>
+                        )}
                       </div>
                       <div className="text-xs text-gray-500 mb-4 font-mono">Detected from: Screenshot</div>
                       <div className="flex flex-wrap gap-2">
                         <button onClick={() => setSelectedScreenshot(item.source)} className="px-3 py-1.5 bg-white border border-gray-300 text-gray-700 rounded-lg text-xs font-semibold hover:bg-gray-50 transition-colors">View Source</button>
+                        <button onClick={() => handleEditDate(item)} className="px-3 py-1.5 bg-white border border-gray-300 text-gray-700 rounded-lg text-xs font-semibold hover:bg-gray-50 transition-colors">Edit Date</button>
                         <button onClick={handleReminder} className="px-3 py-1.5 bg-white border border-gray-300 text-gray-700 rounded-lg text-xs font-semibold hover:bg-gray-50 transition-colors">🔔 Set Reminder</button>
                         {addedToCalendar[item.id] ? (
                           <span className="px-3 py-1.5 bg-green-50 border border-green-200 text-green-700 rounded-lg text-xs font-semibold">✅ Added to Calendar</span>
                         ) : (
                           <button onClick={() => handleCalendar(item)} className="px-3 py-1.5 bg-white border border-gray-300 text-gray-700 rounded-lg text-xs font-semibold hover:bg-gray-50 transition-colors">📅 Add to Calendar</button>
                         )}
-                        <button onClick={handleDismiss} className="px-3 py-1.5 bg-white border border-gray-300 text-gray-500 hover:text-rose-600 rounded-lg text-xs font-semibold hover:bg-rose-50 transition-colors ml-auto">Dismiss</button>
+                        <button onClick={() => handleDismiss(item)} className="px-3 py-1.5 bg-white border border-gray-300 text-gray-500 hover:text-rose-600 rounded-lg text-xs font-semibold hover:bg-rose-50 transition-colors ml-auto">Dismiss</button>
                       </div>
                     </div>
                   );

@@ -1,15 +1,12 @@
 import Screenshot from '../../models/screenshot.js'
-
 import { storeImage, getMissingCloudinaryConfig } from './storage.service.js'
-
 import { extractTextFromImage } from '../ai-processing/ocr.service.js'
-
 import { analyzeScreenshotWithVision } from '../ai-processing/vision.service.js'
-
 import logger from '../../utils/logger.js'
 
 /**
  * Upload single screenshot and trigger OCR + Vision AI processing pipeline.
+ *
  * POST /api/v1/screenshots/upload
  *
  * Pipeline:
@@ -51,16 +48,14 @@ export const uploadScreenshot = async (req, res, next) => {
     // ─────────────────────────────────────────────
     // STAGE 1: Upload to Cloudinary
     // ─────────────────────────────────────────────
+
     const storageResult = await storeImage(req.file)
 
     // Create initial DB record
     const screenshot = new Screenshot({
       user: req.userId,
-
       originalName: req.file.originalname,
-
       mimeType: req.file.mimetype,
-
       size: req.file.size,
 
       storage: storageResult,
@@ -143,6 +138,7 @@ async function processScreenshotPipeline(
     // ─────────────────────────────────────────────
     // STAGE 2: OCR
     // ─────────────────────────────────────────────
+
     logger.info(
       `[Pipeline] Stage 2: OCR processing for ${screenshot._id}`
     )
@@ -188,6 +184,7 @@ async function processScreenshotPipeline(
     // ─────────────────────────────────────────────
     // STAGE 3: Vision AI
     // ─────────────────────────────────────────────
+
     logger.info(
       `[Pipeline] Stage 3: Vision AI analysis for ${screenshot._id}`
     )
@@ -208,6 +205,7 @@ async function processScreenshotPipeline(
     // ─────────────────────────────────────────────
     // STAGE 4: Save AI results
     // ─────────────────────────────────────────────
+
     logger.info(
       `[Pipeline] Stage 4: Saving extracted information for ${screenshot._id}`
     )
@@ -243,6 +241,13 @@ async function processScreenshotPipeline(
       category:
         aiResult.category || 'Other',
 
+      // Sensitive information fields
+      isSensitive:
+        aiResult.isSensitive === true,
+
+      sensitiveType:
+        aiResult.sensitiveType || 'none',
+
       tags:
         aiResult.tags || [],
 
@@ -271,17 +276,6 @@ async function processScreenshotPipeline(
 
       processedAt: new Date(),
     }
-    // 🔐 Automatically move sensitive screenshots to Vault
-    if (aiResult.isSensitive === true) {
-      screenshot.isVault = true
-
-      logger.info(
-        `[Pipeline] 🔐 Screenshot ${screenshot._id} automatically moved to Vault. ` +
-        `Sensitive type: ${aiResult.sensitiveType || 'other'}`
-      )
-    } else {
-      screenshot.isVault = false
-    }
 
     // ─────────────────────────────────────────────
     // 🔐 AUTOMATIC VAULT DETECTION
@@ -293,8 +287,7 @@ async function processScreenshotPipeline(
       logger.info(
         `[Pipeline] 🔐 Screenshot ${screenshot._id} ` +
         `automatically moved to Vault. ` +
-        `Sensitive type: ${aiResult.sensitiveType || 'other'
-        }`
+        `Sensitive type: ${aiResult.sensitiveType || 'other'}`
       )
     } else {
       screenshot.isVault = false
@@ -783,6 +776,228 @@ export const toggleVault = async (
           ? 'Screenshot moved to Vault.'
           : 'Screenshot removed from Vault.',
 
+      data: screenshot,
+    })
+  } catch (error) {
+    next(error)
+  }
+}
+
+/**
+ * Update an extracted date in a screenshot
+ *
+ * PUT /api/v1/screenshots/:id/date
+ */
+export const updateExtractedDate = async (
+  req,
+  res,
+  next
+) => {
+  try {
+    const {
+      category,
+      itemIndex,
+      newDate,
+    } = req.body
+
+    if (
+      !category ||
+      itemIndex === undefined ||
+      !newDate
+    ) {
+      return res.status(400).json({
+        success: false,
+        error:
+          'Missing required fields',
+      })
+    }
+
+    const screenshot =
+      await Screenshot.findOne({
+        _id: req.params.id,
+        user: req.userId,
+      })
+
+    if (!screenshot) {
+      return res.status(404).json({
+        success: false,
+        error:
+          'Screenshot not found',
+      })
+    }
+
+    // Validate date format
+    const d = new Date(newDate)
+
+    if (isNaN(d.getTime())) {
+      return res.status(400).json({
+        success: false,
+        error:
+          'Invalid date provided',
+      })
+    }
+
+    let targetArray
+    let dateField
+
+    switch (category) {
+      case 'extractedTasks':
+        targetArray =
+          screenshot.aiAnalysis.extractedTasks
+        dateField = 'dueDate'
+        break
+
+      case 'actionItems':
+        targetArray =
+          screenshot.aiAnalysis.actionItems
+        dateField = 'dueDate'
+        break
+
+      case 'extractedEvents':
+        targetArray =
+          screenshot.aiAnalysis.extractedEvents
+        dateField = 'date'
+        break
+
+      case 'extractedDates':
+        targetArray =
+          screenshot.aiAnalysis.extractedDates
+        dateField = 'dateText'
+        break
+
+      default:
+        return res.status(400).json({
+          success: false,
+          error:
+            'Invalid category',
+        })
+    }
+
+    if (
+      !targetArray ||
+      !targetArray[itemIndex]
+    ) {
+      return res.status(404).json({
+        success: false,
+        error:
+          'Item not found in specified category',
+      })
+    }
+
+    // Update only the selected date
+    targetArray[itemIndex][dateField] =
+      newDate
+
+    screenshot.markModified(
+      `aiAnalysis.${category}`
+    )
+
+    await screenshot.save()
+
+    res.status(200).json({
+      success: true,
+      data: screenshot,
+    })
+  } catch (error) {
+    next(error)
+  }
+}
+
+/**
+ * Dismiss an action item inside a screenshot
+ *
+ * PATCH /api/v1/screenshots/:id/dismiss
+ */
+export const dismissActionItem = async (
+  req,
+  res,
+  next
+) => {
+  try {
+    const {
+      category,
+      itemIndex,
+    } = req.body
+
+    if (
+      !category ||
+      itemIndex === undefined
+    ) {
+      return res.status(400).json({
+        success: false,
+        error:
+          'Missing required fields',
+      })
+    }
+
+    const screenshot =
+      await Screenshot.findOne({
+        _id: req.params.id,
+        user: req.userId,
+      })
+
+    if (!screenshot) {
+      return res.status(404).json({
+        success: false,
+        error:
+          'Screenshot not found',
+      })
+    }
+
+    let targetArray
+
+    switch (category) {
+      case 'extractedTasks':
+        targetArray =
+          screenshot.aiAnalysis.extractedTasks
+        break
+
+      case 'actionItems':
+        targetArray =
+          screenshot.aiAnalysis.actionItems
+        break
+
+      case 'extractedEvents':
+        targetArray =
+          screenshot.aiAnalysis.extractedEvents
+        break
+
+      case 'extractedDates':
+        targetArray =
+          screenshot.aiAnalysis.extractedDates
+        break
+
+      default:
+        return res.status(400).json({
+          success: false,
+          error:
+            'Invalid category',
+        })
+    }
+
+    if (
+      !targetArray ||
+      !targetArray[itemIndex]
+    ) {
+      return res.status(404).json({
+        success: false,
+        error:
+          'Item not found in specified category',
+      })
+    }
+
+    // Mark it dismissed
+    targetArray[itemIndex].isDismissed =
+      true
+
+    screenshot.markModified(
+      `aiAnalysis.${category}`
+    )
+
+    await screenshot.save()
+
+    res.status(200).json({
+      success: true,
       data: screenshot,
     })
   } catch (error) {

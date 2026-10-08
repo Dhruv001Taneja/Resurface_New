@@ -417,6 +417,88 @@ export async function toggleVaultApi(
 
 /**
  * ==========================================
+ * SCREENSHOT ACTION API ENDPOINTS
+ * ==========================================
+ */
+
+/**
+ * Update an extracted date
+ */
+export async function updateExtractedDateApi(
+  screenshotId,
+  payload
+) {
+  const authToken = getStoredToken();
+
+  if (!authToken) {
+    throw new Error('Not authenticated');
+  }
+
+  const response = await fetch(
+    `${API_BASE_URL}/screenshots/${screenshotId}/date`,
+    {
+      method: 'PUT',
+      headers: {
+        Authorization: `Bearer ${authToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    }
+  );
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(
+      data.error ||
+      data.message ||
+      'Failed to update date'
+    );
+  }
+
+  return data;
+}
+
+/**
+ * Dismiss an action item
+ */
+export async function dismissActionItemApi(
+  screenshotId,
+  payload
+) {
+  const authToken = getStoredToken();
+
+  if (!authToken) {
+    throw new Error('Not authenticated');
+  }
+
+  const response = await fetch(
+    `${API_BASE_URL}/screenshots/${screenshotId}/dismiss`,
+    {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${authToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    }
+  );
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(
+      data.error ||
+      data.message ||
+      'Failed to dismiss item'
+    );
+  }
+
+  return data;
+}
+
+/**
+ * ==========================================
  * CALENDAR API ENDPOINTS
  * ==========================================
  */
@@ -488,11 +570,7 @@ export async function createCalendarEventApi(
       'Failed to create calendar event'
     );
 
-    // Include status code
     error.status = response.status;
-
-    // Include existing event information
-    // if backend returns it during a conflict
     error.data = data.data;
 
     throw error;

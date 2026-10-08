@@ -469,17 +469,17 @@ export default function Dashboard() {
     if (isProcessing(s)) return;
     
     if (s.aiAnalysis?.extractedTasks) {
-       s.aiAnalysis.extractedTasks.forEach((t) => allActions.push({ title: t.task, date: t.dueDate, type: 'task', icon: '🔴', color: 'red', source: s }));
+       s.aiAnalysis.extractedTasks.forEach((t) => { if(!t.isDismissed) allActions.push({ title: t.task, date: t.dueDate, type: 'task', icon: '🔴', color: 'red', source: s }) });
     } else if (s.aiAnalysis?.actionItems) { 
-       s.aiAnalysis.actionItems.forEach((t) => allActions.push({ title: t.description, date: t.dueDate, type: 'task', icon: '🔴', color: 'red', source: s }));
+       s.aiAnalysis.actionItems.forEach((t) => { if(!t.isDismissed) allActions.push({ title: t.description, date: t.dueDate, type: 'task', icon: '🔴', color: 'red', source: s }) });
     }
 
     if (s.aiAnalysis?.extractedEvents) {
-       s.aiAnalysis.extractedEvents.forEach((e) => allActions.push({ title: e.event, date: e.date, type: 'event', icon: '🟣', color: 'indigo', source: s }));
+       s.aiAnalysis.extractedEvents.forEach((e) => { if(!e.isDismissed) allActions.push({ title: e.event, date: e.date, type: 'event', icon: '🟣', color: 'indigo', source: s }) });
     }
 
     if (s.aiAnalysis?.extractedDates) {
-       s.aiAnalysis.extractedDates.forEach((d) => allActions.push({ title: d.context, date: d.dateText, type: 'date', icon: '🟡', color: 'amber', source: s }));
+       s.aiAnalysis.extractedDates.forEach((d) => { if(!d.isDismissed) allActions.push({ title: d.context, date: d.dateText, type: 'date', icon: '🟡', color: 'amber', source: s }) });
     }
   });
 

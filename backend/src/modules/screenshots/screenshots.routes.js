@@ -19,6 +19,8 @@ router.patch('/:id/vault', screenshotsController.toggleVault)
 router.get('/', screenshotsController.getScreenshots)
 router.get('/:id', screenshotsController.getScreenshotById)
 router.patch('/:id/favorite', screenshotsController.toggleFavorite)
+router.patch('/:id/dismiss', screenshotsController.dismissActionItem)
+router.put('/:id/date', screenshotsController.updateExtractedDate)
 router.delete('/:id', screenshotsController.deleteScreenshot)
 
 export default router
