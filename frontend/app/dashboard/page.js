@@ -8,6 +8,7 @@ import {
   fetchScreenshotsApi,
   uploadScreenshotApi,
   fetchScreenshotByIdApi,
+  deleteScreenshotApi,
 } from "../utils/api";
 import ScreenshotDetailsModal from "../components/ScreenshotDetailsModal";
 
@@ -286,6 +287,18 @@ export default function Dashboard() {
     }
   };
 
+  const handleDeleteScreenshot = async (id) => {
+    try {
+      await deleteScreenshotApi(id);
+      // Remove from UI state immediately
+      setDbScreenshots((prev) => prev.filter((s) => s._id !== id && s.id !== id));
+      setSelectedScreenshot(null);
+    } catch (err) {
+      console.error("Delete failed:", err.message);
+      alert(`Failed to delete screenshot: ${err.message}`);
+    }
+  };
+
   // Helper to extract category, tags, and summary safely from document
   const getDocField = (doc, field, fallback = "") => {
     if (!doc) return fallback;
@@ -400,18 +413,16 @@ export default function Dashboard() {
 
   // Sidebar Menu Config
   const primaryNavItems = [
-    { name: "Dashboard", icon: "🏠" },
-    { name: "Screenshots", icon: "📸" },
-    { name: "Search", icon: "🔍" },
-    { name: "Categories", icon: "📂" },
-    { name: "Action Center", icon: "📝" },
-    { name: "Calendar", icon: "📅" },
+    { name: "Dashboard", icon: "🏠", href: "/dashboard" },
+    { name: "Screenshots", icon: "📸", href: "/screenshots" },
+    { name: "Action Center", icon: "📝", href: "/action-center" },
+    { name: "Calendar", icon: "📅", href: "/dashboard" },
     { name: "Reminders", icon: "🔔" },
     { name: "Vault", icon: "🔒" },
-    { name: "Insights", icon: "📊" },
   ];
 
   const secondaryNavItems = [
+    { name: "Insights", icon: "📊" },
     { name: "Settings", icon: "⚙️" },
     { name: "Help", icon: "❓" },
   ];
@@ -452,6 +463,27 @@ export default function Dashboard() {
       </div>
     );
   };
+
+  const allActions = [];
+  displayScreenshots.forEach((s) => {
+    if (isProcessing(s)) return;
+    
+    if (s.aiAnalysis?.extractedTasks) {
+       s.aiAnalysis.extractedTasks.forEach((t) => allActions.push({ title: t.task, date: t.dueDate, type: 'task', icon: '🔴', color: 'red', source: s }));
+    } else if (s.aiAnalysis?.actionItems) { 
+       s.aiAnalysis.actionItems.forEach((t) => allActions.push({ title: t.description, date: t.dueDate, type: 'task', icon: '🔴', color: 'red', source: s }));
+    }
+
+    if (s.aiAnalysis?.extractedEvents) {
+       s.aiAnalysis.extractedEvents.forEach((e) => allActions.push({ title: e.event, date: e.date, type: 'event', icon: '🟣', color: 'indigo', source: s }));
+    }
+
+    if (s.aiAnalysis?.extractedDates) {
+       s.aiAnalysis.extractedDates.forEach((d) => allActions.push({ title: d.context, date: d.dateText, type: 'date', icon: '🟡', color: 'amber', source: s }));
+    }
+  });
+
+  const recentActions = allActions.slice(0, 3);
 
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900 font-sans flex flex-col antialiased">
@@ -542,8 +574,10 @@ export default function Dashboard() {
                   <button
                     key={item.name}
                     onClick={() => {
-                      if (item.name === "Screenshots" || item.name === "Search" || item.name === "Categories") {
+                      if (item.name === "Screenshots") {
                         router.push("/screenshots");
+                      } else if (item.name === "Action Center") {
+                        router.push("/action-center");
                       } else {
                         setActiveTab(item.name);
                       }
@@ -710,21 +744,24 @@ export default function Dashboard() {
                 </h2>
 
                 <div className="space-y-6 px-4">
-                  <div className="flex items-center gap-3 text-base sm:text-lg font-medium text-gray-800">
-                    <span className="text-lg">🔴</span>
-                    <span>Assignment Due</span>
-                  </div>
-
-                  <div className="flex items-center gap-3 text-base sm:text-lg font-medium text-gray-800">
-                    <span className="text-lg">🟡</span>
-                    <span>Meeting tomorrow</span>
-                  </div>
-
-                  <div className="flex items-center gap-3 text-base sm:text-lg font-medium text-gray-800">
-                    <span className="text-lg">🟢</span>
-                    <span>Reminder suggested</span>
-                  </div>
+                  {recentActions.length > 0 ? recentActions.map((item, idx) => (
+                    <div key={idx} className="flex items-center gap-3 text-base sm:text-lg font-medium text-gray-800">
+                      <span className="text-lg">{item.type === 'task' ? '🔴' : item.type === 'event' ? '🟣' : '🟡'}</span>
+                      <span className="truncate">{item.title}</span>
+                    </div>
+                  )) : (
+                    <div className="text-gray-400 text-center text-sm italic">No suggested actions.</div>
+                  )}
                 </div>
+              </div>
+              
+              <div className="flex justify-start pt-6">
+                <Link
+                  href="/action-center"
+                  className="inline-flex items-center gap-1.5 text-sm font-semibold text-gray-900 hover:text-indigo-600 transition-colors"
+                >
+                  <span>📝 View Inbox →</span>
+                </Link>
               </div>
             </div>
           </div>
@@ -732,26 +769,37 @@ export default function Dashboard() {
           {/* BOTTOM GRID */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* 7. UPCOMING CARD */}
-            <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-xs">
-              <h2 className="text-xl font-extrabold text-gray-900 text-center mb-8">
-                Upcoming
-              </h2>
+            <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-xs flex flex-col justify-between">
+              <div>
+                <h2 className="text-xl font-extrabold text-gray-900 text-center mb-8">
+                  Upcoming
+                </h2>
 
-              <div className="space-y-6 px-4">
-                <div className="flex items-center gap-3 text-base sm:text-lg font-medium text-gray-800">
-                  <span className="text-lg">📅</span>
-                  <span>Tomorrow</span>
+                <div className="space-y-6 px-4">
+                  {recentActions.length > 0 ? recentActions.map((item, idx) => (
+                    <div key={idx} className="flex flex-col mb-4">
+                       <div className="flex items-center justify-between">
+                         <div className="flex items-center gap-3 text-base font-medium text-gray-800">
+                           <span className="text-lg">{item.icon}</span>
+                           <span className="truncate max-w-[150px] sm:max-w-[200px]">{item.title}</span>
+                         </div>
+                         <button onClick={() => setSelectedScreenshot(item.source)} className="text-xs text-indigo-600 hover:text-indigo-800 font-semibold bg-indigo-50 px-2 py-1 rounded">View</button>
+                       </div>
+                       {item.date && <div className="text-xs text-gray-500 ml-9 mt-1">Date: {item.date}</div>}
+                    </div>
+                  )) : (
+                    <div className="text-gray-400 text-center text-sm italic">No upcoming items.</div>
+                  )}
                 </div>
-
-                <div className="flex items-center gap-3 text-base sm:text-lg font-medium text-gray-800">
-                  <span className="text-lg">📋</span>
-                  <span>Submit Assignment</span>
-                </div>
-
-                <div className="flex items-center gap-3 text-base sm:text-lg font-medium text-gray-800">
-                  <span className="text-lg">📊</span>
-                  <span>Project</span>
-                </div>
+              </div>
+              
+              <div className="flex justify-start pt-6">
+                <Link
+                  href="/action-center"
+                  className="inline-flex items-center gap-1.5 text-sm font-semibold text-gray-900 hover:text-indigo-600 transition-colors"
+                >
+                  <span>🔍 View All →</span>
+                </Link>
               </div>
             </div>
 
@@ -782,6 +830,7 @@ export default function Dashboard() {
         <ScreenshotDetailsModal
           screenshot={selectedScreenshot}
           onClose={() => setSelectedScreenshot(null)}
+          onDelete={handleDeleteScreenshot}
         />
       )}
     </div>

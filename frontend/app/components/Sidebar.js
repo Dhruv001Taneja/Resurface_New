@@ -16,9 +16,8 @@ export default function Sidebar({
   const primaryNavItems = [
     { name: "Dashboard", icon: "📊", href: "/dashboard" },
     { name: "Screenshots", icon: "📸", href: "/screenshots" },
-    { name: "Categories", icon: "📁", href: "/screenshots" },
-    { name: "Action Center", icon: "⚡", href: "/dashboard" },
-    { name: "Calendar", icon: "📅", href: "/dashboard" },
+    { name: "Action Center", icon: "⚡", href: "/action-center" },
+    { name: "Calendar", icon: "📅", href: "/calendar" },
     { name: "Reminders", icon: "⏰", href: "/dashboard" },
     { name: "Vault", icon: "🔒", href: "/vault" },
   ];

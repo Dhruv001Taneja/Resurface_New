@@ -16,6 +16,7 @@ import connectDB from './config/db.js'
 import logger from './utils/logger.js'
 import authRoutes from './modules/auth/auth.routes.js'
 import screenshotsRoutes from './modules/screenshots/screenshots.routes.js'
+import calendarRoutes from './modules/calendar/calendar.routes.js'
 import errorHandler from './middleware/errorHandler.js'
 
 // Load environment variables
@@ -68,6 +69,7 @@ app.get('/api/v1/health', (_req, res) => {
 // API Routes
 app.use('/api/v1/auth', authRoutes)
 app.use('/api/v1/screenshots', screenshotsRoutes)
+app.use('/api/v1/calendar', calendarRoutes)
 
 // 404 Route Handler
 app.use((req, res) => {
@@ -106,4 +108,4 @@ const startServer = () => {
 
 startServer()
 
-export default app
+export default app;
