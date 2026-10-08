@@ -161,7 +161,7 @@ export default function AuthForm({ initialMode = "login" }) {
               RE
             </div>
             <span className="font-extrabold text-2xl tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-indigo-700 via-purple-700 to-indigo-600">
-              RESecure
+              ReSurface
             </span>
           </Link>
           <p className="text-slate-600 text-sm">
@@ -364,7 +364,7 @@ export default function AuthForm({ initialMode = "login" }) {
                   <span>{mode === "register" ? "Creating Account..." : "Signing In..."}</span>
                 </>
               ) : (
-                <span>{mode === "register" ? "Register Account" : "Sign In to RESecure"}</span>
+                <span>{mode === "register" ? "Register Account" : "Sign In to ReSurface"}</span>
               )}
             </button>
           </form>

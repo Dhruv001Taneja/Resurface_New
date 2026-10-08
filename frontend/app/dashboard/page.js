@@ -503,7 +503,7 @@ export default function Dashboard() {
               RE
             </div>
             <span className="font-extrabold text-xl tracking-tight text-gray-900">
-              RESecure
+              ReSurface
             </span>
           </Link>
         </div>
@@ -562,7 +562,7 @@ export default function Dashboard() {
         >
           <div className="p-4 overflow-y-auto">
             <div className="px-3 py-2 font-extrabold text-xl tracking-tight text-gray-900">
-              RESecure
+              ReSurface
             </div>
 
             <div className="border-t border-gray-200 my-3" />

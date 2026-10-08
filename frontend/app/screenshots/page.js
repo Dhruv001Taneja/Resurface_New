@@ -249,7 +249,7 @@ export default function ScreenshotsPage() {
             href="/dashboard"
             className="font-extrabold text-xl tracking-tight text-gray-900 flex items-center gap-2 hover:text-indigo-600 transition-colors"
           >
-            <span>RESecure</span>
+            <span>ReSurface</span>
           </Link>
         </div>
 
@@ -518,7 +518,7 @@ export default function ScreenshotsPage() {
               <p className="text-gray-500 text-sm leading-relaxed mb-6">
                 {searchQuery || selectedCategory !== "All"
                   ? "Try adjusting your search terms or clearing category filters."
-                  : "Upload your first screenshot to let RESecure understand and organize it."}
+                  : "Upload your first screenshot to let ReSurface understand and organize it."}
               </p>
 
               {searchQuery || selectedCategory !== "All" ? (
