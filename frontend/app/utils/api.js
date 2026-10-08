@@ -230,6 +230,50 @@ export async function fetchCalendarEventsApi() {
   return data;
 }
 
+export async function updateExtractedDateApi(screenshotId, payload) {
+  const authToken = getStoredToken();
+  if (!authToken) throw new Error('Not authenticated');
+
+  const response = await fetch(`${API_BASE_URL}/screenshots/${screenshotId}/date`, {
+    method: 'PUT',
+    headers: {
+      'Authorization': `Bearer ${authToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.error || data.message || 'Failed to update date');
+  }
+
+  return data;
+}
+
+export async function dismissActionItemApi(screenshotId, payload) {
+  const authToken = getStoredToken();
+  if (!authToken) throw new Error('Not authenticated');
+
+  const response = await fetch(`${API_BASE_URL}/screenshots/${screenshotId}/dismiss`, {
+    method: 'PATCH',
+    headers: {
+      'Authorization': `Bearer ${authToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.error || data.message || 'Failed to dismiss item');
+  }
+
+  return data;
+}
+
+
+
 export async function createCalendarEventApi(eventData) {
   const authToken = getStoredToken();
   if (!authToken) throw new Error('Not authenticated');

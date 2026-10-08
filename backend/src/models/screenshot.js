@@ -114,6 +114,7 @@ const screenshotSchema = new mongoose.Schema(
         {
           dateText: { type: String },
           context: { type: String },
+          isDismissed: { type: Boolean, default: false },
         },
       ],
       extractedTasks: [
@@ -125,6 +126,7 @@ const screenshotSchema = new mongoose.Schema(
             enum: ['high', 'medium', 'low'],
             default: 'medium',
           },
+          isDismissed: { type: Boolean, default: false },
         },
       ],
       extractedEvents: [
@@ -133,6 +135,7 @@ const screenshotSchema = new mongoose.Schema(
           date: { type: String, default: null },
           time: { type: String, default: null },
           location: { type: String, default: null },
+          isDismissed: { type: Boolean, default: false },
         },
       ],
       actionItems: [
@@ -146,6 +149,7 @@ const screenshotSchema = new mongoose.Schema(
           dueDate: Date,
           amount: String,
           isCompleted: { type: Boolean, default: false },
+          isDismissed: { type: Boolean, default: false },
         },
       ],
       processedAt: Date,

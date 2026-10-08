@@ -301,3 +301,126 @@ export const deleteScreenshot = async (req, res, next) => {
     next(error)
   }
 }
+
+/**
+ * Update an extracted date in a screenshot
+ * PUT /api/v1/screenshots/:id/date
+ */
+export const updateExtractedDate = async (req, res, next) => {
+  try {
+    const { category, itemIndex, newDate } = req.body;
+    
+    if (!category || itemIndex === undefined || !newDate) {
+       return res.status(400).json({ success: false, error: 'Missing required fields' });
+    }
+
+    const screenshot = await Screenshot.findOne({ _id: req.params.id, user: req.userId });
+    if (!screenshot) {
+      return res.status(404).json({ success: false, error: 'Screenshot not found' });
+    }
+
+    // validate date format
+    const d = new Date(newDate);
+    if (isNaN(d.getTime())) {
+       return res.status(400).json({ success: false, error: 'Invalid date provided' });
+    }
+
+    let targetArray;
+    let dateField;
+
+    switch (category) {
+      case 'extractedTasks':
+        targetArray = screenshot.aiAnalysis.extractedTasks;
+        dateField = 'dueDate';
+        break;
+      case 'actionItems':
+        targetArray = screenshot.aiAnalysis.actionItems;
+        dateField = 'dueDate';
+        break;
+      case 'extractedEvents':
+        targetArray = screenshot.aiAnalysis.extractedEvents;
+        dateField = 'date';
+        break;
+      case 'extractedDates':
+        targetArray = screenshot.aiAnalysis.extractedDates;
+        dateField = 'dateText';
+        break;
+      default:
+        return res.status(400).json({ success: false, error: 'Invalid category' });
+    }
+
+    if (!targetArray || !targetArray[itemIndex]) {
+       return res.status(404).json({ success: false, error: 'Item not found in specified category' });
+    }
+
+    // Update the field
+    targetArray[itemIndex][dateField] = newDate;
+    screenshot.markModified(`aiAnalysis.${category}`);
+
+    // If it's actionItems, we also need to update the top-level tasks array because of the pre-save hook?
+    // Actually, the pre-save hook handles actionItems to tasks sync automatically on every save!
+    // So modifying actionItems is enough.
+    
+    // BUT what about top level `screenshot.dates`?
+    // It is parsed from `entities.dates` in the pipeline, which isn't what we are modifying here.
+    // The prompt says "Do NOT overwrite unrelated AI analysis. Only the selected item's date should change."
+
+    await screenshot.save();
+
+    res.status(200).json({ success: true, data: screenshot });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * Dismiss an action item inside a screenshot
+ * PATCH /api/v1/screenshots/:id/dismiss
+ */
+export const dismissActionItem = async (req, res, next) => {
+  try {
+    const { category, itemIndex } = req.body;
+    
+    if (!category || itemIndex === undefined) {
+       return res.status(400).json({ success: false, error: 'Missing required fields' });
+    }
+
+    const screenshot = await Screenshot.findOne({ _id: req.params.id, user: req.userId });
+    if (!screenshot) {
+      return res.status(404).json({ success: false, error: 'Screenshot not found' });
+    }
+
+    let targetArray;
+    switch (category) {
+      case 'extractedTasks':
+        targetArray = screenshot.aiAnalysis.extractedTasks;
+        break;
+      case 'actionItems':
+        targetArray = screenshot.aiAnalysis.actionItems;
+        break;
+      case 'extractedEvents':
+        targetArray = screenshot.aiAnalysis.extractedEvents;
+        break;
+      case 'extractedDates':
+        targetArray = screenshot.aiAnalysis.extractedDates;
+        break;
+      default:
+        return res.status(400).json({ success: false, error: 'Invalid category' });
+    }
+
+    if (!targetArray || !targetArray[itemIndex]) {
+       return res.status(404).json({ success: false, error: 'Item not found in specified category' });
+    }
+
+    // Mark it dismissed
+    targetArray[itemIndex].isDismissed = true;
+    screenshot.markModified(`aiAnalysis.${category}`);
+
+    await screenshot.save();
+
+    res.status(200).json({ success: true, data: screenshot });
+  } catch (error) {
+    next(error);
+  }
+}
+
