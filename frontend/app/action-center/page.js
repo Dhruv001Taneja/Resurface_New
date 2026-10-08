@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../context/AuthContext";
-import { fetchScreenshotsApi, deleteScreenshotApi } from "../utils/api";
+import { fetchScreenshotsApi, deleteScreenshotApi, createCalendarEventApi } from "../utils/api";
 import Sidebar from "../components/Sidebar";
 import ScreenshotDetailsModal from "../components/ScreenshotDetailsModal";
 
@@ -18,6 +18,7 @@ export default function ActionCenter() {
   
   const [filter, setFilter] = useState("All"); 
   const [selectedScreenshot, setSelectedScreenshot] = useState(null);
+  const [addedToCalendar, setAddedToCalendar] = useState({});
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -57,8 +58,34 @@ export default function ActionCenter() {
     alert("Reminder integration not yet implemented.");
   };
 
-  const handleCalendar = () => {
-    alert("Calendar integration not yet implemented.");
+  const handleCalendar = async (item) => {
+    try {
+      let title = item.task || item.event || item.context || 'New Event';
+      let dateStr = item.dueDate || item.date || item.dateText;
+      let date = dateStr ? new Date(dateStr) : new Date();
+      if (isNaN(date.getTime())) {
+         date = new Date(); // fallback if parsing fails
+      }
+
+      await createCalendarEventApi({
+        title,
+        date: date.toISOString(),
+        startTime: item.time || '',
+        location: item.location || '',
+        type: item.type === 'task' ? 'task' : item.type === 'date' ? 'deadline' : 'event',
+        priority: item.priority || '',
+        sourceScreenshotId: item.source?._id
+      });
+      setAddedToCalendar(prev => ({ ...prev, [item.id]: true }));
+      alert("Added to calendar successfully!");
+    } catch (err) {
+      if (err.status === 409) {
+        setAddedToCalendar(prev => ({ ...prev, [item.id]: true }));
+        alert("Already added to Calendar.");
+      } else {
+        alert(`Failed to add to calendar: ${err.message}`);
+      }
+    }
   };
   
   const handleDismiss = () => {
@@ -222,7 +249,11 @@ export default function ActionCenter() {
                       <div className="flex flex-wrap gap-2">
                         <button onClick={() => setSelectedScreenshot(item.source)} className="px-3 py-1.5 bg-white border border-gray-300 text-gray-700 rounded-lg text-xs font-semibold hover:bg-gray-50 transition-colors">View Source</button>
                         <button onClick={handleReminder} className="px-3 py-1.5 bg-white border border-gray-300 text-gray-700 rounded-lg text-xs font-semibold hover:bg-gray-50 transition-colors">🔔 Set Reminder</button>
-                        <button onClick={handleCalendar} className="px-3 py-1.5 bg-white border border-gray-300 text-gray-700 rounded-lg text-xs font-semibold hover:bg-gray-50 transition-colors">📅 Add to Calendar</button>
+                        {addedToCalendar[item.id] ? (
+                          <span className="px-3 py-1.5 bg-green-50 border border-green-200 text-green-700 rounded-lg text-xs font-semibold">✅ Added to Calendar</span>
+                        ) : (
+                          <button onClick={() => handleCalendar(item)} className="px-3 py-1.5 bg-white border border-gray-300 text-gray-700 rounded-lg text-xs font-semibold hover:bg-gray-50 transition-colors">📅 Add to Calendar</button>
+                        )}
                         <button onClick={handleDismiss} className="px-3 py-1.5 bg-white border border-gray-300 text-gray-500 hover:text-rose-600 rounded-lg text-xs font-semibold hover:bg-rose-50 transition-colors ml-auto">Dismiss</button>
                       </div>
                     </div>
@@ -246,7 +277,11 @@ export default function ActionCenter() {
                       <div className="text-xs text-gray-500 mb-4 font-mono">Detected from: Screenshot</div>
                       <div className="flex flex-wrap gap-2">
                         <button onClick={() => setSelectedScreenshot(item.source)} className="px-3 py-1.5 bg-white border border-gray-300 text-gray-700 rounded-lg text-xs font-semibold hover:bg-gray-50 transition-colors">View Source</button>
-                        <button onClick={handleCalendar} className="px-3 py-1.5 bg-white border border-gray-300 text-gray-700 rounded-lg text-xs font-semibold hover:bg-gray-50 transition-colors">📅 Add to Calendar</button>
+                        {addedToCalendar[item.id] ? (
+                          <span className="px-3 py-1.5 bg-green-50 border border-green-200 text-green-700 rounded-lg text-xs font-semibold">✅ Added to Calendar</span>
+                        ) : (
+                          <button onClick={() => handleCalendar(item)} className="px-3 py-1.5 bg-white border border-gray-300 text-gray-700 rounded-lg text-xs font-semibold hover:bg-gray-50 transition-colors">📅 Add to Calendar</button>
+                        )}
                         <button onClick={handleReminder} className="px-3 py-1.5 bg-white border border-gray-300 text-gray-700 rounded-lg text-xs font-semibold hover:bg-gray-50 transition-colors">🔔 Set Reminder</button>
                         <button onClick={handleDismiss} className="px-3 py-1.5 bg-white border border-gray-300 text-gray-500 hover:text-rose-600 rounded-lg text-xs font-semibold hover:bg-rose-50 transition-colors ml-auto">Dismiss</button>
                       </div>
@@ -270,7 +305,11 @@ export default function ActionCenter() {
                       <div className="flex flex-wrap gap-2">
                         <button onClick={() => setSelectedScreenshot(item.source)} className="px-3 py-1.5 bg-white border border-gray-300 text-gray-700 rounded-lg text-xs font-semibold hover:bg-gray-50 transition-colors">View Source</button>
                         <button onClick={handleReminder} className="px-3 py-1.5 bg-white border border-gray-300 text-gray-700 rounded-lg text-xs font-semibold hover:bg-gray-50 transition-colors">🔔 Set Reminder</button>
-                        <button onClick={handleCalendar} className="px-3 py-1.5 bg-white border border-gray-300 text-gray-700 rounded-lg text-xs font-semibold hover:bg-gray-50 transition-colors">📅 Add to Calendar</button>
+                        {addedToCalendar[item.id] ? (
+                          <span className="px-3 py-1.5 bg-green-50 border border-green-200 text-green-700 rounded-lg text-xs font-semibold">✅ Added to Calendar</span>
+                        ) : (
+                          <button onClick={() => handleCalendar(item)} className="px-3 py-1.5 bg-white border border-gray-300 text-gray-700 rounded-lg text-xs font-semibold hover:bg-gray-50 transition-colors">📅 Add to Calendar</button>
+                        )}
                         <button onClick={handleDismiss} className="px-3 py-1.5 bg-white border border-gray-300 text-gray-500 hover:text-rose-600 rounded-lg text-xs font-semibold hover:bg-rose-50 transition-colors ml-auto">Dismiss</button>
                       </div>
                     </div>

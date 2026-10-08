@@ -206,3 +206,91 @@ export async function deleteScreenshotApi(id) {
   return data;
 }
 
+/**
+ * CALENDAR API ENDPOINTS
+ */
+
+export async function fetchCalendarEventsApi() {
+  const authToken = getStoredToken();
+  if (!authToken) throw new Error('Not authenticated');
+
+  const response = await fetch(`${API_BASE_URL}/calendar`, {
+    method: 'GET',
+    headers: {
+      'Authorization': `Bearer ${authToken}`,
+      'Content-Type': 'application/json',
+    },
+  });
+
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.error || data.message || 'Failed to fetch calendar events');
+  }
+
+  return data;
+}
+
+export async function createCalendarEventApi(eventData) {
+  const authToken = getStoredToken();
+  if (!authToken) throw new Error('Not authenticated');
+
+  const response = await fetch(`${API_BASE_URL}/calendar`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${authToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(eventData),
+  });
+
+  const data = await response.json();
+  if (!response.ok) {
+    const error = new Error(data.error || data.message || 'Failed to create calendar event');
+    error.status = response.status;
+    error.data = data.data; // include existing event info if conflict
+    throw error;
+  }
+
+  return data;
+}
+
+export async function updateCalendarEventApi(id, eventData) {
+  const authToken = getStoredToken();
+  if (!authToken) throw new Error('Not authenticated');
+
+  const response = await fetch(`${API_BASE_URL}/calendar/${id}`, {
+    method: 'PUT',
+    headers: {
+      'Authorization': `Bearer ${authToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(eventData),
+  });
+
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.error || data.message || 'Failed to update calendar event');
+  }
+
+  return data;
+}
+
+export async function deleteCalendarEventApi(id) {
+  const authToken = getStoredToken();
+  if (!authToken) throw new Error('Not authenticated');
+
+  const response = await fetch(`${API_BASE_URL}/calendar/${id}`, {
+    method: 'DELETE',
+    headers: {
+      'Authorization': `Bearer ${authToken}`,
+      'Content-Type': 'application/json',
+    },
+  });
+
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.error || data.message || 'Failed to delete calendar event');
+  }
+
+  return data;
+}
