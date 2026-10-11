@@ -1,3 +1,4 @@
+
 import mongoose from 'mongoose'
 import bcryptjs from 'bcryptjs'
 
@@ -22,6 +23,31 @@ const userSchema = new mongoose.Schema(
     passwordHash: {
       type: String,
       required: [true, 'Password is required'],
+    },
+
+    // Email OTP verification fields
+    emailVerificationOtpHash: {
+      type: String,
+      default: undefined,
+      select: false,
+    },
+
+    emailVerificationOtpExpiresAt: {
+      type: Date,
+      default: undefined,
+      select: false,
+    },
+
+    emailVerificationOtpAttempts: {
+      type: Number,
+      default: 0,
+      select: false,
+    },
+
+    emailVerificationOtpSentAt: {
+      type: Date,
+      default: undefined,
+      select: false,
     },
 
     authProvider: {
@@ -87,36 +113,54 @@ const userSchema = new mongoose.Schema(
   }
 )
 
-// Synchronize top-level fields with accountInfo before saving & hash password
+// Synchronize account fields and hash passwords before saving
 userSchema.pre('save', async function () {
   if (this.accountInfo) {
-    if (this.lastLoginAt) this.accountInfo.lastLoginAt = this.lastLoginAt
-    if (this.role) this.accountInfo.role = this.role
+    if (this.lastLoginAt) {
+      this.accountInfo.lastLoginAt = this.lastLoginAt
+    }
+
+    if (this.role) {
+      this.accountInfo.role = this.role
+    }
+
     if (this.isActive !== undefined) {
-      this.accountInfo.status = this.isActive ? 'active' : 'inactive'
+      this.accountInfo.status = this.isActive
+        ? 'active'
+        : 'inactive'
     }
   }
 
+  // Do not hash the password again unless it has changed
   if (!this.isModified('passwordHash')) return
 
   const salt = await bcryptjs.genSalt(12)
   this.passwordHash = await bcryptjs.hash(this.passwordHash, salt)
 })
 
-// Compare password method
-userSchema.methods.comparePassword = async function (candidatePassword) {
+// Compare a supplied password with the stored password hash
+userSchema.methods.comparePassword = async function (
+  candidatePassword
+) {
   return bcryptjs.compare(candidatePassword, this.passwordHash)
 }
 
-// Remove sensitive fields from JSON output
+// Remove sensitive fields from JSON responses
 userSchema.methods.toJSON = function () {
   const user = this.toObject()
+
   delete user.passwordHash
   delete user.__v
+
+  // Extra protection against accidentally exposing OTP information
+  delete user.emailVerificationOtpHash
+  delete user.emailVerificationOtpExpiresAt
+  delete user.emailVerificationOtpAttempts
+  delete user.emailVerificationOtpSentAt
+
   return user
 }
 
 const User = mongoose.model('User', userSchema)
 
 export default User
-

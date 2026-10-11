@@ -1,0 +1,37 @@
+text,label
+Sign in to your account. Username and password are required. Forgot password?,credentials
+"Enter your username, password, and one-time verification code to continue.",credentials
+Create a new password and confirm your password before submitting.,credentials
+Login failed. Check your credentials and try signing in again.,credentials
+"Account security settings: change password, enable two-factor authentication.",credentials
+"Username field, password field, remember me, sign in button.",credentials
+"Bank statement: account summary, available balance, transaction history.",banking
+"UPI payment details: UPI ID, bank account, IFSC code, transfer status.",banking
+Beneficiary bank account details and account number for fund transfer.,banking
+"NEFT transfer receipt showing bank name, IFSC, and transaction reference.",banking
+UPI transaction successful. Payment sent from linked bank account.,banking
+"Banking app displays account balance, recent transactions, and transfer options.",banking
+"Credit card payment form with card number, expiry date, and CVV fields.",cards
+Debit card transaction receipt and card payment status.,cards
+"Card details page: cardholder name, card number, expiry month and year.",cards
+Payment gateway asks the user to enter debit card information.,cards
+"Credit card statement lists purchases, due date, and minimum payment.",cards
+Choose a saved card or add a new payment card.,cards
+Passport application form with passport number and date of birth.,identity
+PAN card application status and permanent account number details.,identity
+Aadhaar document verification with identity number and registered address.,identity
+"Upload identity proof such as passport, PAN card, or Aadhaar document.",identity
+"Identity document details include date of birth, document number, and name.",identity
+Government identity verification portal requests proof of identity.,identity
+"Contact us: email address, phone number, and office address.",personal
+"Delivery form asks for full name, phone number, and residential address.",personal
+"Personal profile page displays email, contact number, and home address.",personal
+Emergency contact details and alternate phone number form.,personal
+"Shipping information: recipient name, email, telephone, and postal address.",personal
+Update your profile information and communication preferences.,personal
+A recipe for vegetable soup with ingredients and cooking instructions.,general
+"Article about football tactics, team formation, and training exercises.",general
+Lecture notes describing photosynthesis and plant cell structure.,general
+"Travel blog describing mountain scenery, hiking routes, and local food.",general
+"Weather forecast shows temperature, cloud cover, and chance of rain.",general
+"A shopping page lists product descriptions, colors, and general prices.",general
