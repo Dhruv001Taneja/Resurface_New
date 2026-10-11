@@ -261,7 +261,7 @@ export default function CalendarPage() {
             <span className="text-xl">☰</span>
           </button>
           <Link href="/dashboard" className="font-extrabold text-xl tracking-tight text-gray-900 flex items-center gap-2 hover:text-indigo-600 transition-colors">
-            RESecure
+            ReSurface
           </Link>
         </div>
 

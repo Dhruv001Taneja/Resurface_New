@@ -503,19 +503,11 @@ export default function ScreenshotsPage() {
           >
             <Icon name="menu" />
           </button>
-
-          <Link href="/dashboard" className="flex shrink-0 items-center gap-3">
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-teal-300 text-[#081014] shadow-[0_0_24px_rgba(94,234,212,0.12)]">
-              <Icon name="images" size={22} />
-            </span>
-            <span className="hidden sm:block">
-              <span className="block text-base font-bold tracking-tight text-white">
-                ReSurface
-              </span>
-              <span className="block text-[10px] tracking-[0.17em] text-slate-500">
-                VISUAL WORKSPACE
-              </span>
-            </span>
+          <Link
+            href="/dashboard"
+            className="font-extrabold text-xl tracking-tight text-gray-900 flex items-center gap-2 hover:text-indigo-600 transition-colors"
+          >
+            <span>RESecure</span>
           </Link>
         </div>
 
@@ -985,68 +977,47 @@ export default function ScreenshotsPage() {
               </div>
             )}
 
-            {/* Screenshot gallery */}
-            {!loading && !error && screenshots.length > 0 && (
-              <div
-                className={`grid gap-5 ${viewMode === "grid"
-                    ? "grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4"
-                    : "grid-cols-1"
-                  }`}
-              >
-                {screenshots.map((screenshot, index) => (
-                  <div
-                    key={screenshot._id || screenshot.id || index}
-                    className={viewMode === "list" ? "max-w-none" : ""}
-                  >
-                    <ScreenshotCard
-                      screenshot={screenshot}
-                      onOpen={setSelectedScreenshot}
-                    />
-                  </div>
-                ))}
+          {/* ================================================== */}
+          {/* 10. EMPTY STATE                                    */}
+          {/* ================================================== */}
+          {!loading && !error && screenshots.length === 0 && (
+            <div className="bg-white border border-gray-200 rounded-2xl p-12 text-center shadow-xs my-6 max-w-md mx-auto flex flex-col items-center">
+              <div className="h-16 w-16 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center text-3xl mb-4 shadow-xs">
+                📸
               </div>
-            )}
+              <h3 className="text-lg sm:text-xl font-extrabold text-gray-900 mb-2">
+                {searchQuery || selectedCategory !== "All"
+                  ? "No matching screenshots"
+                  : "No screenshots yet"}
+              </h3>
+              <p className="text-gray-500 text-sm leading-relaxed mb-6">
+                {searchQuery || selectedCategory !== "All"
+                  ? "Try adjusting your search terms or clearing category filters."
+                  : "Upload your first screenshot to let RESecure understand and organize it."}
+              </p>
 
-            {/* Empty state */}
-            {!loading && !error && screenshots.length === 0 && (
-              <div className="rounded-2xl border border-dashed border-slate-700 bg-[#0d141e] px-5 py-16 text-center sm:py-20">
-                <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl border border-slate-700 bg-[#101722] text-teal-300">
-                  <Icon name="image-plus" size={29} />
-                </div>
-                <h3 className="text-lg font-semibold text-white">
-                  {searchQuery.trim() || selectedCategory !== "All"
-                    ? "No matching screenshots"
-                    : "Your visual library starts here"}
-                </h3>
-                <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-500">
-                  {searchQuery.trim() || selectedCategory !== "All"
-                    ? "Try a different search or select another category."
-                    : "Save a screenshot to keep useful ideas, notes, and references close at hand."}
-                </p>
-                {searchQuery.trim() || selectedCategory !== "All" ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSearchQuery("");
-                      setSelectedCategory("All");
-                      setPage(1);
-                    }}
-                    className="mt-5 rounded-xl border border-slate-700 px-5 py-2.5 text-sm font-medium text-slate-200 transition hover:border-teal-300/40 hover:text-teal-300"
-                  >
-                    Clear filters
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="mt-5 inline-flex items-center gap-2 rounded-xl bg-teal-300 px-5 py-3 text-sm font-semibold text-[#071116] transition hover:bg-teal-200"
-                  >
-                    <Icon name="upload" size={17} />
-                    Upload your first screenshot
-                  </button>
-                )}
-              </div>
-            )}
+              {searchQuery || selectedCategory !== "All" ? (
+                <button
+                  onClick={() => {
+                    setSearchQuery("");
+                    setSelectedCategory("All");
+                    setPage(1);
+                  }}
+                  className="bg-gray-100 hover:bg-gray-200 text-gray-800 text-sm font-semibold px-5 py-2.5 rounded-xl transition-all"
+                >
+                  Clear Filters
+                </button>
+              ) : (
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold px-5 py-2.5 rounded-xl transition-all shadow-xs flex items-center gap-2"
+                >
+                  <span>+</span>
+                  <span>Upload Screenshot</span>
+                </button>
+              )}
+            </div>
+          )}
 
             {/* Pagination */}
             {!loading && screenshots.length > 0 && totalPages > 1 && (

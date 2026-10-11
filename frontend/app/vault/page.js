@@ -390,7 +390,7 @@ export default function VaultPage() {
 
                             <p className="text-sm text-indigo-700 mt-1">
                                 Sensitive information is hidden by default. Only screenshots
-                                already uploaded to RESecure can appear here. No second upload
+                                already uploaded to ReSurface can appear here. No second upload
                                 is required.
                             </p>
 
