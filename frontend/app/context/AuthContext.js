@@ -1,7 +1,8 @@
+
 "use client";
 
 import { createContext, useContext, useState, useEffect } from "react";
-import { useRouter, usePathname } from "next/navigation";
+import { useRouter } from "next/navigation";
 import {
   getStoredToken,
   setStoredToken,
@@ -16,44 +17,70 @@ const AuthContext = createContext({
   token: null,
   isAuthenticated: false,
   isLoading: true,
-  login: () => {},
-  logout: () => {},
+  login: () => { },
+  logout: () => { },
 });
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [token, setToken] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+
   const router = useRouter();
-  const pathname = usePathname();
 
   useEffect(() => {
+    let isMounted = true;
+
     const initAuth = async () => {
-      const storedToken = getStoredToken();
-      const storedUser = getStoredUser();
+      try {
+        const storedToken = getStoredToken();
+        const storedUser = getStoredUser();
 
-      if (storedToken) {
-        setToken(storedToken);
-        setUser(storedUser);
+        if (!storedToken) {
+          return;
+        }
 
-        try {
-          // Verify token validity with backend
-          const res = await fetchMeApi(storedToken);
-          if (res?.user) {
+        if (isMounted) {
+          setToken(storedToken);
+          setUser(storedUser);
+        }
+
+        // Verify the saved token with the backend
+        const res = await fetchMeApi(storedToken);
+
+        if (res?.user) {
+          if (isMounted) {
             setUser(res.user);
             setStoredUser(res.user);
           }
-        } catch (_err) {
-          // Token is invalid or expired
+        } else {
           clearAuthStorage();
+
+          if (isMounted) {
+            setToken(null);
+            setUser(null);
+          }
+        }
+      } catch (_err) {
+        // Token is invalid, expired, or the request failed
+        clearAuthStorage();
+
+        if (isMounted) {
           setToken(null);
           setUser(null);
         }
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
       }
-      setIsLoading(false);
     };
 
     initAuth();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const login = (userData, authToken) => {
@@ -75,7 +102,7 @@ export function AuthProvider({ children }) {
       value={{
         user,
         token,
-        isAuthenticated: !!token && !!user,
+        isAuthenticated: Boolean(token && user),
         isLoading,
         login,
         logout,

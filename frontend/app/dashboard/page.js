@@ -1,6 +1,7 @@
+
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../context/AuthContext";
@@ -12,47 +13,166 @@ import {
 } from "../utils/api";
 import ScreenshotDetailsModal from "../components/ScreenshotDetailsModal";
 
+const navigation = [
+  { name: "Dashboard", icon: "▦", href: "/dashboard" },
+  { name: "Screenshots", icon: "▧", href: "/screenshots" },
+  { name: "Action Center", icon: "✓", href: "/action-center" },
+  { name: "Calendar", icon: "▦", href: "/calendar" },
+  { name: "Vault", icon: "▣", href: "/vault" },
+];
+
+function getTitle(item) {
+  return (
+    item?.aiAnalysis?.title ||
+    item?.title ||
+    item?.originalName ||
+    "Untitled screenshot"
+  );
+}
+
+function getSummary(item) {
+  return (
+    item?.aiAnalysis?.summary ||
+    item?.summary ||
+    "No summary available yet."
+  );
+}
+
+function getCategory(item) {
+  return item?.aiAnalysis?.category || item?.category || "Uncategorized";
+}
+
+function getImage(item) {
+  return (
+    item?.thumbnailUrl ||
+    item?.imageUrl ||
+    item?.storage?.thumbnailUrl ||
+    item?.storage?.imageUrl ||
+    item?.storage?.url ||
+    ""
+  );
+}
+
+function getTasks(item) {
+  const analysis = item?.aiAnalysis;
+  if (!analysis) return [];
+
+  if (Array.isArray(analysis.extractedTasks)) {
+    return analysis.extractedTasks.filter((task) => !task.isDismissed);
+  }
+
+  if (Array.isArray(analysis.actionItems)) {
+    return analysis.actionItems.filter((task) => !task.isDismissed);
+  }
+
+  return [];
+}
+
+function getEvents(item) {
+  return Array.isArray(item?.aiAnalysis?.extractedEvents)
+    ? item.aiAnalysis.extractedEvents.filter((event) => !event.isDismissed)
+    : [];
+}
+
+function getDates(item) {
+  return Array.isArray(item?.aiAnalysis?.extractedDates)
+    ? item.aiAnalysis.extractedDates.filter((date) => !date.isDismissed)
+    : [];
+}
+
+function isProcessing(item) {
+  const overall = item?.processingPipeline?.overall;
+
+  if (overall) {
+    return overall !== "completed" && overall !== "failed";
+  }
+
+  return (
+    item?.ocr?.status === "processing" ||
+    item?.aiAnalysis?.status === "processing" ||
+    item?.aiAnalysis?.status === "pending"
+  );
+}
+
+function getDate(item) {
+  const value = item?.createdAt || item?.updatedAt;
+
+  if (!value) return "Recently added";
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) return "Recently added";
+
+  return date.toLocaleDateString(undefined, {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+function StatCard({ label, value, icon, description }) {
+  return (
+    <div className="rounded-2xl border border-white/[0.08] bg-[#101722] p-5 transition hover:border-teal-400/30">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-sm text-slate-400">{label}</p>
+          <p className="mt-3 text-3xl font-semibold tracking-tight text-white">
+            {value}
+          </p>
+        </div>
+
+        <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-teal-400/15 bg-teal-400/[0.08] text-xl text-teal-300">
+          {icon}
+        </div>
+      </div>
+
+      <p className="mt-3 text-xs text-slate-500">{description}</p>
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const { user, isAuthenticated, isLoading, logout } = useAuth();
   const router = useRouter();
 
-  // Navigation State
-  const [activeTab, setActiveTab] = useState("Dashboard");
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-
-  // Search & Modal State
+  const [screenshots, setScreenshots] = useState([]);
+  const [loadingScreenshots, setLoadingScreenshots] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedScreenshot, setSelectedScreenshot] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
-  const [uploadStatus, setUploadStatus] = useState(null);
+  const [uploadStatus, setUploadStatus] = useState("");
+  const [pageError, setPageError] = useState("");
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  // Backend Screenshot Data
-  const [dbScreenshots, setDbScreenshots] = useState([]);
-  const [dbLoading, setDbLoading] = useState(false);
-
-  // Polling ref for processing state
   const pollIntervalRef = useRef(null);
 
-  // Protect Route: Redirect unauthenticated users to /login
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
       router.replace("/login");
     }
-  }, [isAuthenticated, isLoading, router]);
+  }, [isLoading, isAuthenticated, router]);
 
-  // Fetch real screenshots from MongoDB backend for logged-in user
   const loadScreenshots = async () => {
     if (!isAuthenticated) return;
-    setDbLoading(true);
+
+    setLoadingScreenshots(true);
+    setPageError("");
+
     try {
-      const res = await fetchScreenshotsApi();
-      if (res?.data && Array.isArray(res.data)) {
-        setDbScreenshots(res.data);
+      const response = await fetchScreenshotsApi();
+
+      if (Array.isArray(response?.data)) {
+        setScreenshots(response.data);
+      } else {
+        setScreenshots([]);
       }
-    } catch (err) {
-      console.warn("Error fetching user screenshots:", err.message);
+    } catch (error) {
+      console.error("Unable to load screenshots:", error);
+      setPageError(
+        error.message || "Unable to load screenshots. Please try again."
+      );
     } finally {
-      setDbLoading(false);
+      setLoadingScreenshots(false);
     }
   };
 
@@ -62,775 +182,668 @@ export default function Dashboard() {
     }
   }, [isAuthenticated]);
 
-  // Auto-poll selected screenshot if processing is pending
   useEffect(() => {
-    if (
-      selectedScreenshot &&
-      (selectedScreenshot.processingPipeline?.overall !== "completed" &&
-        selectedScreenshot.processingPipeline?.overall !== "failed" &&
-        (selectedScreenshot.ocr?.status === "processing" ||
-          selectedScreenshot.aiAnalysis?.status === "processing" ||
-          selectedScreenshot.aiAnalysis?.status === "pending"))
-    ) {
-      pollIntervalRef.current = setInterval(async () => {
-        try {
-          const fresh = await fetchScreenshotByIdApi(
-            selectedScreenshot._id || selectedScreenshot.id
-          );
-          if (fresh?.data) {
-            setSelectedScreenshot(fresh.data);
-            setDbScreenshots((prev) =>
-              prev.map((item) =>
-                (item._id || item.id) === (fresh.data._id || fresh.data.id)
-                  ? fresh.data
-                  : item
-              )
-            );
-            if (
-              fresh.data.processingPipeline?.overall === "completed" ||
-              fresh.data.processingPipeline?.overall === "failed" ||
-              (fresh.data.ocr?.status !== "processing" &&
-                fresh.data.aiAnalysis?.status !== "processing" &&
-                fresh.data.aiAnalysis?.status !== "pending")
-            ) {
-              clearInterval(pollIntervalRef.current);
-            }
-          }
-        } catch (_err) {
-          // ignore poll error
-        }
-      }, 2500);
-    }
+    if (!selectedScreenshot) return;
+
+    const screenshotId =
+      selectedScreenshot._id || selectedScreenshot.id;
+
+    if (!screenshotId) return;
+
+    if (!isProcessing(selectedScreenshot)) return;
+
+    pollIntervalRef.current = setInterval(async () => {
+      try {
+        const response = await fetchScreenshotByIdApi(screenshotId);
+        const fresh = response?.data;
+
+        if (!fresh) return;
+
+        setSelectedScreenshot(fresh);
+
+        setScreenshots((previous) =>
+          previous.map((item) =>
+            (item._id || item.id) === (fresh._id || fresh.id)
+              ? fresh
+              : item
+          )
+        );
+      } catch (error) {
+        console.warn("Screenshot status refresh failed:", error);
+      }
+    }, 3000);
 
     return () => {
-      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
+      }
     };
   }, [selectedScreenshot]);
 
-  // Dynamic Greeting based on local time
-  const getGreeting = () => {
+  const handleUpload = async (event) => {
+    const file = event.target.files?.[0];
+
+    // Allow selecting the same file again later.
+    event.target.value = "";
+
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      setUploadStatus("Please select an image file.");
+      return;
+    }
+
+    setIsUploading(true);
+    setUploadStatus("Uploading your screenshot...");
+    setPageError("");
+
+    try {
+      const response = await uploadScreenshotApi(file);
+
+      if (response?.data) {
+        setScreenshots((previous) => [
+          response.data,
+          ...previous,
+        ]);
+
+        setSelectedScreenshot(response.data);
+        setUploadStatus("Upload complete. AI processing has started.");
+      } else {
+        await loadScreenshots();
+        setUploadStatus("Upload completed. Refreshing your screenshots...");
+      }
+    } catch (error) {
+      console.error("Screenshot upload failed:", error);
+      setPageError(error.message || "Screenshot upload failed.");
+      setUploadStatus("");
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleDelete = async (id) => {
+    try {
+      await deleteScreenshotApi(id);
+
+      setScreenshots((previous) =>
+        previous.filter((item) => (item._id || item.id) !== id)
+      );
+
+      setSelectedScreenshot(null);
+    } catch (error) {
+      console.error("Screenshot deletion failed:", error);
+      setPageError(error.message || "Could not delete this screenshot.");
+    }
+  };
+
+  const displayName = user?.name || "there";
+  const firstName = displayName.trim().split(/\s+/)[0];
+
+  const greeting = useMemo(() => {
     const hour = new Date().getHours();
+
     if (hour < 12) return "Good morning";
     if (hour < 18) return "Good afternoon";
     return "Good evening";
-  };
+  }, []);
 
-  const userName = user?.name || "AMAN";
+  const filteredScreenshots = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
 
-  // Demo / Fallback Screenshots if database is empty for display
-  const fallbackScreenshots = [
-    {
-      id: "demo-1",
-      title: "Campus Note & Congestion Control",
-      imageUrl: "https://images.unsplash.com/photo-1544717305-2782549b5136?w=600&auto=format&fit=crop&q=80",
-      category: "Document",
-      summary: "Congestion detection mechanisms in TCP protocols: timeout slow-start vs 3-ACK fast recovery.",
-      tags: ["networking", "TCP", "notes"],
-      ocr: {
-        status: "completed",
-        extractedText:
-          "An implementation reacts to congestion detection in one of the following ways:\n\nIf detection is by time-out, a new slow start phase starts.\n\nIf detection is by three ACKs, a new congestion avoidance phase starts.",
-      },
-      aiAnalysis: {
-        status: "completed",
-        title: "Campus Note & Congestion Control",
-        summary: "Congestion detection mechanisms in TCP protocols: timeout slow-start vs 3-ACK fast recovery.",
-        category: "Document",
-        tags: ["networking", "TCP", "notes"],
-        entities: {
-          dates: ["Tomorrow, 10:00 AM"],
-          amounts: [],
-          urls: ["https://ietf.org/rfc/tcp"],
-          emails: [],
-          phoneNumbers: [],
-          addresses: [],
-          names: ["TCP Protocol"],
-        },
-        extractedDates: [{ dateText: "Tomorrow, 10:00 AM", context: "Network lab session" }],
-        extractedTasks: [{ task: "Submit Network Assignment", dueDate: "2026-10-15", priority: "high" }],
-        extractedEvents: [],
-        actionItems: [
-          { description: "Submit Network Assignment", dueDate: "2026-10-15", isCompleted: false },
-        ],
-      },
-      processingPipeline: { overall: "completed" },
-      createdAt: new Date().toISOString(),
-    },
-    {
-      id: "demo-2",
-      title: "AWS Cloud Infrastructure Invoice",
-      imageUrl: "https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?w=600&auto=format&fit=crop&q=80",
-      category: "Receipt",
-      summary: "Monthly AWS billing invoice showing $142.50 charge for EC2 and S3 resources.",
-      tags: ["finance", "aws", "invoice"],
-      ocr: {
-        status: "completed",
-        extractedText: "Amazon Web Services Invoice\nDate: Oct 01, 2026\nAccount: 4892-1029-3810\nTotal Due: $142.50\nPayment Method: Visa ending in 4092",
-      },
-      aiAnalysis: {
-        status: "completed",
-        title: "AWS Cloud Infrastructure Invoice",
-        summary: "Monthly AWS billing invoice showing $142.50 charge for EC2 and S3 resources.",
-        category: "Receipt",
-        tags: ["finance", "aws", "invoice"],
-        entities: {
-          amounts: ["$142.50"],
-          dates: ["Oct 01, 2026"],
-          emails: ["billing@aws.amazon.com"],
-          urls: [],
-          phoneNumbers: [],
-          addresses: [],
-          names: ["Amazon Web Services"],
-        },
-        extractedDates: [{ dateText: "Oct 01, 2026", context: "Invoice date" }],
-        extractedTasks: [{ task: "Process accounting expense entry", dueDate: "2026-10-15", priority: "medium" }],
-        extractedEvents: [],
-        actionItems: [
-          { description: "Process accounting expense entry", dueDate: "2026-10-15", isCompleted: false },
-        ],
-      },
-      processingPipeline: { overall: "completed" },
-      createdAt: new Date().toISOString(),
-    },
-    {
-      id: "demo-3",
-      title: "Tech Conference Boarding Pass",
-      imageUrl: "https://images.unsplash.com/photo-1436491865332-7a61a109cc05?w=600&auto=format&fit=crop&q=80",
-      category: "Ticket",
-      summary: "Boarding ticket for Delta Flight DL492 leaving JFK at 08:30 AM.",
-      tags: ["flight", "travel", "ticket"],
-      ocr: {
-        status: "completed",
-        extractedText: "DELTA AIRLINES BOARDING PASS\nFLIGHT: DL492\nFROM: JFK TO: SFO\nDATE: 2026-10-20\nDEPART: 08:30 AM\nSEAT: 14B ZONE: 3",
-      },
-      aiAnalysis: {
-        status: "completed",
-        title: "Tech Conference Boarding Pass",
-        summary: "Boarding ticket for Delta Flight DL492 leaving JFK at 08:30 AM.",
-        category: "Ticket",
-        tags: ["flight", "travel", "ticket"],
-        entities: {
-          dates: ["2026-10-20"],
-          names: ["Delta Airlines"],
-          amounts: [],
-          urls: [],
-          emails: [],
-          phoneNumbers: [],
-          addresses: [],
-        },
-        extractedDates: [{ dateText: "2026-10-20", context: "Flight departure date" }],
-        extractedTasks: [],
-        extractedEvents: [{ event: "Flight DL492", date: "2026-10-20", time: "08:30 AM", location: "JFK to SFO" }],
-        actionItems: [],
-      },
-      processingPipeline: { overall: "completed" },
-      createdAt: new Date().toISOString(),
-    },
-    {
-      id: "demo-4",
-      title: "React Debounce Custom Hook",
-      imageUrl: "https://images.unsplash.com/photo-1555066931-4365d14bab8c?w=600&auto=format&fit=crop&q=80",
-      category: "Code",
-      summary: "Clean React custom hook implementation for input throttling.",
-      tags: ["react", "javascript", "code"],
-      ocr: {
-        status: "completed",
-        extractedText: "function useDebounce(value, delay) {\n  const [debouncedValue, setDebouncedValue] = useState(value);\n  useEffect(() => {\n    const handler = setTimeout(() => setDebouncedValue(value), delay);\n    return () => clearTimeout(handler);\n  }, [value, delay]);\n  return debouncedValue;\n}",
-      },
-      aiAnalysis: {
-        status: "completed",
-        title: "React Debounce Custom Hook",
-        summary: "Clean React custom hook implementation for input throttling.",
-        category: "Code",
-        tags: ["react", "javascript", "code"],
-        entities: { dates: [], amounts: [], urls: [], emails: [], phoneNumbers: [], addresses: [], names: [] },
-        extractedDates: [],
-        extractedTasks: [],
-        extractedEvents: [],
-        actionItems: [],
-      },
-      processingPipeline: { overall: "completed" },
-      createdAt: new Date().toISOString(),
-    },
-  ];
+    if (!query) return screenshots;
 
-  const displayScreenshots = dbScreenshots.length > 0 ? dbScreenshots : fallbackScreenshots;
-  const screenshotCount = dbScreenshots.length > 0 ? dbScreenshots.length : 128;
-  const taskCount = 13;
-  const eventCount = 6;
+    return screenshots.filter((item) => {
+      const title = getTitle(item).toLowerCase();
+      const summary = getSummary(item).toLowerCase();
+      const category = getCategory(item).toLowerCase();
 
-  // File Upload Handler with Instant Details View opening
-  const handleFileUpload = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+      return (
+        title.includes(query) ||
+        summary.includes(query) ||
+        category.includes(query)
+      );
+    });
+  }, [screenshots, searchQuery]);
 
-    setIsUploading(true);
-    setUploadStatus("Uploading to Cloudinary...");
+  const favoriteCount = screenshots.filter(
+    (item) => item.isFavorite || item.favorite
+  ).length;
 
-    try {
-      const res = await uploadScreenshotApi(file);
-      if (res?.data) {
-        const newDoc = res.data;
-        setDbScreenshots((prev) => [newDoc, ...prev]);
-        setUploadStatus("Upload complete — AI processing started...");
-        // Open details modal immediately with actual MongoDB returned data!
-        setSelectedScreenshot(newDoc);
-      }
-    } catch (err) {
-      console.error("Upload error:", err.message);
-      setUploadStatus(`Upload failed: ${err.message}`);
-    } finally {
-      setTimeout(() => {
-        setIsUploading(false);
-        setUploadStatus(null);
-      }, 2000);
-    }
-  };
+  const tasks = screenshots.flatMap((item) =>
+    getTasks(item).map((task) => ({
+      ...task,
+      title: task.task || task.description || "Untitled task",
+      date: task.dueDate,
+      source: item,
+      type: "task",
+    }))
+  );
 
-  const handleDeleteScreenshot = async (id) => {
-    try {
-      await deleteScreenshotApi(id);
-      // Remove from UI state immediately
-      setDbScreenshots((prev) => prev.filter((s) => s._id !== id && s.id !== id));
-      setSelectedScreenshot(null);
-    } catch (err) {
-      console.error("Delete failed:", err.message);
-      alert(`Failed to delete screenshot: ${err.message}`);
-    }
-  };
+  const events = screenshots.flatMap((item) =>
+    getEvents(item).map((event) => ({
+      ...event,
+      title: event.event || event.title || "Untitled event",
+      date: event.date,
+      source: item,
+      type: "event",
+    }))
+  );
 
-  // Helper to extract category, tags, and summary safely from document
-  const getDocField = (doc, field, fallback = "") => {
-    if (!doc) return fallback;
-    if (field === "summary") {
-      return doc.aiAnalysis?.summary || doc.summary || fallback;
-    }
-    if (field === "category") {
-      return doc.aiAnalysis?.category || doc.category || fallback || "Other";
-    }
-    if (field === "title") {
-      return doc.aiAnalysis?.title || doc.title || doc.originalName || fallback || "Screenshot Details";
-    }
-    if (field === "ocrText") {
-      return doc.ocr?.extractedText || doc.extractedText || "";
-    }
-    return fallback;
-  };
+  const dates = screenshots.flatMap((item) =>
+    getDates(item).map((date) => ({
+      ...date,
+      title: date.context || date.dateText || "Extracted date",
+      date: date.dateText,
+      source: item,
+      type: "date",
+    }))
+  );
 
-  // Extract tags array
-  const getDocTags = (doc) => {
-    if (!doc) return [];
-    if (Array.isArray(doc.aiAnalysis?.tags) && doc.aiAnalysis.tags.length > 0) {
-      return doc.aiAnalysis.tags;
-    }
-    if (Array.isArray(doc.tags)) return doc.tags;
-    return [];
-  };
-
-  // Extract extracted dates
-  const getDocExtractedDates = (doc) => {
-    if (!doc) return [];
-    if (Array.isArray(doc.aiAnalysis?.extractedDates) && doc.aiAnalysis.extractedDates.length > 0) {
-      return doc.aiAnalysis.extractedDates;
-    }
-    // Fallback to entity dates
-    if (Array.isArray(doc.aiAnalysis?.entities?.dates) && doc.aiAnalysis.entities.dates.length > 0) {
-      return doc.aiAnalysis.entities.dates.map((d) => ({ dateText: d, context: "" }));
-    }
-    if (Array.isArray(doc.dates) && doc.dates.length > 0) {
-      return doc.dates.map((d) => ({
-        dateText: d instanceof Date ? d.toLocaleDateString() : String(d),
-        context: "",
-      }));
-    }
-    return [];
-  };
-
-  // Extract extracted tasks
-  const getDocExtractedTasks = (doc) => {
-    if (!doc) return [];
-    if (Array.isArray(doc.aiAnalysis?.extractedTasks) && doc.aiAnalysis.extractedTasks.length > 0) {
-      return doc.aiAnalysis.extractedTasks;
-    }
-    if (Array.isArray(doc.aiAnalysis?.actionItems) && doc.aiAnalysis.actionItems.length > 0) {
-      return doc.aiAnalysis.actionItems.map((item) => ({
-        task: item.description || "Task",
-        dueDate: item.dueDate || null,
-        priority: "medium",
-      }));
-    }
-    if (Array.isArray(doc.tasks) && doc.tasks.length > 0) {
-      return doc.tasks.map((t) => ({
-        task: t.description || "Task",
-        dueDate: t.dueDate || null,
-        priority: t.priority || "medium",
-      }));
-    }
-    return [];
-  };
-
-  // Extract extracted events
-  const getDocExtractedEvents = (doc) => {
-    if (!doc) return [];
-    if (Array.isArray(doc.aiAnalysis?.extractedEvents) && doc.aiAnalysis.extractedEvents.length > 0) {
-      return doc.aiAnalysis.extractedEvents;
-    }
-    return [];
-  };
-
-  // Extract entities object
-  const getDocEntities = (doc) => {
-    if (!doc || !doc.aiAnalysis?.entities) return null;
-    const e = doc.aiAnalysis.entities;
-    const hasAny =
-      (e.amounts && e.amounts.length > 0) ||
-      (e.urls && e.urls.length > 0) ||
-      (e.emails && e.emails.length > 0) ||
-      (e.phoneNumbers && e.phoneNumbers.length > 0) ||
-      (e.addresses && e.addresses.length > 0) ||
-      (e.names && e.names.length > 0);
-    return hasAny ? e : null;
-  };
-
-  // Get processing pipeline status
-  const getPipelineStatus = (doc) => {
-    if (!doc) return null;
-    return doc.processingPipeline || null;
-  };
-
-  const isProcessing = (doc) => {
-    if (!doc) return false;
-    const pipeline = doc.processingPipeline;
-    if (pipeline) {
-      return pipeline.overall !== "completed" && pipeline.overall !== "failed";
-    }
-    return (
-      doc.ocr?.status === "processing" ||
-      doc.aiAnalysis?.status === "processing" ||
-      doc.aiAnalysis?.status === "pending"
-    );
-  };
-
-  // Sidebar Menu Config
-  const primaryNavItems = [
-    { name: "Dashboard", icon: "🏠", href: "/dashboard" },
-    { name: "Screenshots", icon: "📸", href: "/screenshots" },
-    { name: "Action Center", icon: "📝", href: "/action-center" },
-    { name: "Calendar", icon: "📅", href: "/dashboard" },
-    { name: "Reminders", icon: "🔔" },
-    { name: "Vault", icon: "🔒" },
-  ];
-
-  const secondaryNavItems = [
-    { name: "Insights", icon: "📊" },
-    { name: "Settings", icon: "⚙️" },
-    { name: "Help", icon: "❓" },
-  ];
+  const recentActions = [...tasks, ...events, ...dates].slice(0, 4);
 
   if (isLoading || !isAuthenticated) {
     return (
-      <div className="min-h-screen bg-white flex items-center justify-center text-gray-500 font-sans">
-        <div className="flex items-center gap-3">
-          <svg className="animate-spin h-6 w-6 text-indigo-600" fill="none" viewBox="0 0 24 24">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-          </svg>
-          <span className="text-sm font-medium">Authenticating & loading dashboard...</span>
+      <main className="flex min-h-screen items-center justify-center bg-[#080d14] text-white">
+        <div className="text-center">
+          <div className="mx-auto mb-4 h-9 w-9 animate-spin rounded-full border-2 border-teal-400/20 border-t-teal-400" />
+          <p className="text-sm text-slate-400">
+            Loading your workspace...
+          </p>
         </div>
-      </div>
+      </main>
     );
   }
 
-  // Pipeline step indicator component
-  const PipelineStep = ({ label, status, icon }) => {
-    const statusColors = {
-      pending: "bg-gray-200 text-gray-500",
-      processing: "bg-amber-100 text-amber-700 animate-pulse",
-      completed: "bg-emerald-100 text-emerald-700",
-      failed: "bg-red-100 text-red-700",
-    };
-    const statusIcons = {
-      pending: "⏳",
-      processing: "⚙️",
-      completed: "✅",
-      failed: "❌",
-    };
-
-    return (
-      <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold ${statusColors[status] || statusColors.pending}`}>
-        <span>{statusIcons[status] || icon}</span>
-        <span>{label}</span>
-      </div>
-    );
-  };
-
-  const allActions = [];
-  displayScreenshots.forEach((s) => {
-    if (isProcessing(s)) return;
-    
-    if (s.aiAnalysis?.extractedTasks) {
-       s.aiAnalysis.extractedTasks.forEach((t) => { if(!t.isDismissed) allActions.push({ title: t.task, date: t.dueDate, type: 'task', icon: '🔴', color: 'red', source: s }) });
-    } else if (s.aiAnalysis?.actionItems) { 
-       s.aiAnalysis.actionItems.forEach((t) => { if(!t.isDismissed) allActions.push({ title: t.description, date: t.dueDate, type: 'task', icon: '🔴', color: 'red', source: s }) });
-    }
-
-    if (s.aiAnalysis?.extractedEvents) {
-       s.aiAnalysis.extractedEvents.forEach((e) => { if(!e.isDismissed) allActions.push({ title: e.event, date: e.date, type: 'event', icon: '🟣', color: 'indigo', source: s }) });
-    }
-
-    if (s.aiAnalysis?.extractedDates) {
-       s.aiAnalysis.extractedDates.forEach((d) => { if(!d.isDismissed) allActions.push({ title: d.context, date: d.dateText, type: 'date', icon: '🟡', color: 'amber', source: s }) });
-    }
-  });
-
-  const recentActions = allActions.slice(0, 3);
-
   return (
-    <div className="min-h-screen bg-gray-50 text-gray-900 font-sans flex flex-col antialiased">
-      {/* 1. TOP HEADER BAR */}
-      <header className="sticky top-0 z-40 bg-white border-b border-gray-200 px-4 sm:px-8 py-3.5 flex items-center justify-between shadow-xs">
-        <div className="flex items-center gap-4">
-          <button
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="md:hidden p-2 rounded-lg text-gray-600 hover:bg-gray-100 transition-colors"
-            aria-label="Toggle navigation"
-          >
-            <span className="text-xl">☰</span>
-          </button>
-
-          <Link href="/dashboard" className="flex items-center gap-2 group">
-            <div className="h-8 w-8 rounded-lg bg-indigo-600 flex items-center justify-center font-extrabold text-white text-sm shadow-sm group-hover:bg-indigo-700 transition-colors">
-              RE
-            </div>
-            <span className="font-extrabold text-xl tracking-tight text-gray-900">
-              RESecure
-            </span>
-          </Link>
-        </div>
-
-        {/* Search Bar */}
-        <div className="flex-1 max-w-md mx-4 hidden sm:block">
-          <div className="relative">
-            <input
-              type="text"
-              placeholder="Search screenshots..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-gray-50 border border-gray-300 rounded-full py-2 px-4 pl-10 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
-            />
-            <span className="absolute left-3.5 top-2.5 text-gray-400 text-sm">🔍</span>
-          </div>
-        </div>
-
-        {/* Right Actions */}
-        <div className="flex items-center gap-3 sm:gap-5">
-          <label className="cursor-pointer bg-indigo-600 hover:bg-indigo-700 text-white text-xs sm:text-sm font-semibold px-3.5 py-2 rounded-lg flex items-center gap-1.5 shadow-sm transition-all">
-            <span>+ Upload</span>
-            <input type="file" accept="image/*" onChange={handleFileUpload} className="hidden" />
-          </label>
-
-          <button className="relative p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-full transition-colors">
-            <span className="text-lg">🔔</span>
-            <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-rose-500 ring-2 ring-white" />
-          </button>
-
-          <div className="flex items-center gap-2 border-l border-gray-200 pl-3 sm:pl-4">
-            <div className="h-8 w-8 rounded-full bg-indigo-100 border border-indigo-200 flex items-center justify-center font-bold text-indigo-700 text-xs">
-              {userName.substring(0, 2).toUpperCase()}
-            </div>
-            <span className="font-bold text-sm text-gray-800 hidden sm:inline-block">
-              {userName}
-            </span>
+    <div className="min-h-screen bg-[#080d14] font-sans text-slate-100">
+      {/* Header */}
+      <header className="sticky top-0 z-40 border-b border-white/[0.08] bg-[#0b111b]/95 backdrop-blur-xl">
+        <div className="flex h-[72px] items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center gap-3">
             <button
-              onClick={logout}
-              title="Sign Out"
-              className="ml-1 text-xs font-semibold text-gray-500 hover:text-rose-600 hover:bg-rose-50 px-2 py-1 rounded transition-colors"
+              type="button"
+              onClick={() => setMobileMenuOpen((open) => !open)}
+              className="rounded-lg border border-white/10 px-3 py-2 text-slate-300 md:hidden"
+              aria-label="Toggle navigation"
             >
-              Logout
+              ☰
             </button>
+
+            <Link href="/dashboard" className="flex items-center gap-3">
+              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-teal-400 font-bold text-[#06252a]">
+                RE
+              </span>
+              <span className="text-xl font-bold tracking-tight">
+                ReSurface<span className="text-teal-300">.</span>
+              </span>
+            </Link>
+          </div>
+
+          <div className="hidden max-w-md flex-1 sm:block">
+            <div className="relative mx-6">
+              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500">
+                ⌕
+              </span>
+              <input
+                type="search"
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder="Search your screenshots..."
+                className="w-full rounded-xl border border-white/[0.08] bg-[#101722] py-2.5 pl-10 pr-4 text-sm text-white outline-none placeholder:text-slate-500 focus:border-teal-400/50"
+              />
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <label className="cursor-pointer rounded-xl bg-teal-400 px-3 py-2.5 text-sm font-semibold text-[#06252a] transition hover:bg-teal-300 sm:px-4">
+              <span>{isUploading ? "Uploading..." : "+ Upload"}</span>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleUpload}
+                disabled={isUploading}
+                className="hidden"
+              />
+            </label>
+
+            <div className="hidden items-center gap-3 border-l border-white/10 pl-4 sm:flex">
+              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-teal-400/10 text-sm font-bold text-teal-300">
+                {displayName.slice(0, 2).toUpperCase()}
+              </div>
+
+              <div className="hidden xl:block">
+                <p className="max-w-36 truncate text-sm font-semibold">
+                  {displayName}
+                </p>
+                <p className="max-w-36 truncate text-xs text-slate-500">
+                  {user?.email}
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={logout}
+                className="text-xs text-slate-400 transition hover:text-rose-300"
+              >
+                Logout
+              </button>
+            </div>
           </div>
         </div>
       </header>
 
-      {/* DASHBOARD BODY */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* 2. LEFT SIDEBAR */}
-        <aside
-          className={`${
-            mobileMenuOpen ? "translate-x-0" : "-translate-x-full"
-          } md:translate-x-0 fixed md:static inset-y-0 left-0 z-30 w-64 bg-white border-r border-gray-200 flex flex-col justify-between transition-transform duration-200 ease-in-out shrink-0`}
-        >
-          <div className="p-4 overflow-y-auto">
-            <div className="px-3 py-2 font-extrabold text-xl tracking-tight text-gray-900">
-              RESecure
-            </div>
-
-            <div className="border-t border-gray-200 my-3" />
-
-            <nav className="space-y-1">
-              {primaryNavItems.map((item) => {
-                const isActive = activeTab === item.name;
-                return (
-                  <button
-                    key={item.name}
-                    onClick={() => {
-                      if (item.name === "Screenshots") {
-                        router.push("/screenshots");
-                      } else if (item.name === "Action Center") {
-                        router.push("/action-center");
-                      } else {
-                        setActiveTab(item.name);
-                      }
-                      setMobileMenuOpen(false);
-                    }}
-                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                      isActive
-                        ? "bg-indigo-50 text-indigo-600 font-semibold border-r-4 border-indigo-600"
-                        : "text-gray-700 hover:bg-gray-100 hover:text-gray-900"
-                    }`}
-                  >
-                    <span className="text-base">{item.icon}</span>
-                    <span>{item.name}</span>
-                  </button>
-                );
-              })}
-            </nav>
-
-            <div className="border-t border-gray-200 my-4" />
-
-            <nav className="space-y-1">
-              {secondaryNavItems.map((item) => {
-                const isActive = activeTab === item.name;
-                return (
-                  <button
-                    key={item.name}
-                    onClick={() => {
-                      setActiveTab(item.name);
-                      setMobileMenuOpen(false);
-                    }}
-                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                      isActive
-                        ? "bg-indigo-50 text-indigo-600 font-semibold"
-                        : "text-gray-700 hover:bg-gray-100 hover:text-gray-900"
-                    }`}
-                  >
-                    <span className="text-base">{item.icon}</span>
-                    <span className={item.name === "Help" ? "text-rose-600 font-semibold" : ""}>
-                      {item.name}
-                    </span>
-                  </button>
-                );
-              })}
-            </nav>
-          </div>
-
-          <div className="p-4 border-t border-gray-200 bg-gray-50/50">
-            <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">
-              Logged in as
-            </div>
-            <div className="text-sm font-bold text-gray-900 truncate">{userName}</div>
-            <div className="text-xs text-gray-500 truncate">{user?.email}</div>
-          </div>
-        </aside>
-
+      <div className="flex min-h-[calc(100vh-72px)]">
+        {/* Mobile overlay */}
         {mobileMenuOpen && (
-          <div
+          <button
+            type="button"
+            aria-label="Close navigation"
             onClick={() => setMobileMenuOpen(false)}
-            className="md:hidden fixed inset-0 z-20 bg-gray-900/30 backdrop-blur-xs"
+            className="fixed inset-0 z-20 bg-black/60 md:hidden"
           />
         )}
 
-        {/* 3. MAIN DASHBOARD CONTENT AREA */}
-        <main className="flex-1 overflow-y-auto p-4 sm:p-8 max-w-7xl mx-auto w-full">
-          {/* Upload Status Alert */}
-          {isUploading && (
-            <div className="mb-6 p-4 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-700 text-sm flex items-center gap-3 animate-pulse shadow-sm">
-              <span className="h-3 w-3 rounded-full bg-indigo-600 animate-ping" />
-              <span className="font-semibold">{uploadStatus}</span>
-            </div>
-          )}
-
-          {/* GREETING HEADER */}
-          <div className="mb-8">
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-gray-900 tracking-tight">
-              {getGreeting()}, {userName} 👋
-            </h1>
-            <p className="text-gray-500 text-sm sm:text-base mt-1 font-normal">
-              Here's what your screenshots are telling you.
+        {/* Sidebar */}
+        <aside
+          className={`fixed bottom-0 left-0 top-[72px] z-30 flex w-64 flex-col border-r border-white/[0.08] bg-[#0b111b] transition-transform duration-200 md:sticky md:top-[72px] md:h-[calc(100vh-72px)] md:translate-x-0 ${mobileMenuOpen ? "translate-x-0" : "-translate-x-full"
+            }`}
+        >
+          <div className="p-5">
+            <p className="mb-4 px-3 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">
+              WORKSPACE
             </p>
+
+            <nav className="space-y-1">
+              {navigation.map((item, index) => {
+                const active = index === 0;
+
+                return (
+                  <Link
+                    key={item.name}
+                    href={item.href}
+                    onClick={() => setMobileMenuOpen(false)}
+                    className={`flex items-center gap-3 rounded-xl px-3 py-3 text-sm transition ${active
+                        ? "border border-teal-400/15 bg-teal-400/10 font-semibold text-teal-300"
+                        : "text-slate-400 hover:bg-white/[0.04] hover:text-white"
+                      }`}
+                  >
+                    <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/[0.04] text-base">
+                      {item.icon}
+                    </span>
+                    {item.name}
+                  </Link>
+                );
+              })}
+            </nav>
+
+            <div className="my-6 border-t border-white/[0.08]" />
+
+            <p className="mb-4 px-3 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">
+              PREFERENCES
+            </p>
+
+            <Link
+              href="/settings"
+              className="flex items-center gap-3 rounded-xl px-3 py-3 text-sm text-slate-400 transition hover:bg-white/[0.04] hover:text-white"
+            >
+              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/[0.04]">
+                ⚙
+              </span>
+              Settings
+            </Link>
           </div>
 
-          {/* 4. STATISTICS CARDS */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-            <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-xs hover:shadow-md transition-all duration-200 flex flex-col justify-between">
-              <div className="flex items-center gap-2 mb-4">
-                <span className="text-2xl">📸</span>
-                <span className="font-extrabold text-xl text-gray-900">Screenshots</span>
-              </div>
-              <div className="text-4xl font-black text-gray-900 text-center py-2">
-                {dbLoading ? "..." : screenshotCount}
-              </div>
+          <div className="mt-auto border-t border-white/[0.08] p-5">
+            <div className="rounded-xl border border-teal-400/10 bg-teal-400/[0.04] p-4">
+              <p className="text-xs font-semibold text-teal-200">
+                Your workspace
+              </p>
+              <p className="mt-2 text-xs leading-5 text-slate-400">
+                Keep useful information organized and easy to find.
+              </p>
             </div>
 
-            <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-xs hover:shadow-md transition-all duration-200 flex flex-col justify-between">
-              <div className="flex items-center gap-2 mb-4">
-                <span className="text-2xl">📋</span>
-                <span className="font-extrabold text-xl text-gray-900">Task</span>
-              </div>
-              <div className="text-4xl font-black text-gray-900 text-center py-2">
-                {taskCount}
-              </div>
-            </div>
-
-            <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-xs hover:shadow-md transition-all duration-200 flex flex-col justify-between">
-              <div className="flex items-center gap-2 mb-4">
-                <span className="text-2xl">📅</span>
-                <span className="font-extrabold text-xl text-gray-900">Events</span>
-              </div>
-              <div className="text-4xl font-black text-gray-900 text-center py-2">
-                {eventCount}
-              </div>
+            <div className="mt-5 truncate text-xs text-slate-500">
+              Signed in as {displayName}
             </div>
           </div>
+        </aside>
 
-          {/* MIDDLE GRID */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-            {/* 5. RECENT SCREENSHOTS CARD */}
-            <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-xs flex flex-col justify-between">
-              <div>
-                <h2 className="text-xl font-extrabold text-gray-900 text-center mb-6">
-                  Recent Screenshots
-                </h2>
-
-                <div className="grid grid-cols-4 gap-3 sm:gap-4 mb-6">
-                  {displayScreenshots.slice(0, 8).map((item, idx) => (
-                    <div
-                      key={item._id || item.id || idx}
-                      onClick={() => setSelectedScreenshot(item)}
-                      className="group relative aspect-square rounded-xl overflow-hidden bg-gray-100 border border-gray-200 cursor-pointer hover:shadow-md hover:border-indigo-400 transition-all"
-                    >
-                      <img
-                        src={item.thumbnailUrl || item.imageUrl || item.storage?.thumbnailUrl || item.storage?.imageUrl || "https://images.unsplash.com/photo-1544717305-2782549b5136?w=300&auto=format&fit=crop&q=80"}
-                        alt={getDocField(item, "title")}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
-                      />
-                      <div className="absolute inset-0 bg-gray-900/0 group-hover:bg-gray-900/10 transition-colors" />
-                      {/* Processing indicator overlay */}
-                      {isProcessing(item) && (
-                        <div className="absolute bottom-1 right-1">
-                          <span className="inline-block h-3 w-3 rounded-full bg-amber-400 animate-pulse border border-white shadow" title="Processing..." />
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
+        {/* Main dashboard */}
+        <main className="min-w-0 flex-1 px-4 py-7 sm:px-6 sm:py-9 lg:px-9">
+          <div className="mx-auto max-w-[1400px]">
+            {uploadStatus && (
+              <div className="mb-5 rounded-xl border border-teal-400/20 bg-teal-400/[0.08] px-4 py-3 text-sm text-teal-200">
+                {uploadStatus}
               </div>
+            )}
 
-              <div className="flex justify-start pt-2">
+            {pageError && (
+              <div
+                role="alert"
+                className="mb-5 flex items-center justify-between gap-4 rounded-xl border border-rose-400/20 bg-rose-400/[0.08] px-4 py-3 text-sm text-rose-300"
+              >
+                <span>{pageError}</span>
                 <button
-                  onClick={() => router.push("/screenshots")}
-                  className="inline-flex items-center gap-1.5 text-sm font-semibold text-gray-900 hover:text-indigo-600 transition-colors"
+                  type="button"
+                  onClick={loadScreenshots}
+                  className="shrink-0 font-semibold underline underline-offset-4"
                 >
-                  <span>🔍 View All →</span>
+                  Retry
                 </button>
               </div>
-            </div>
+            )}
 
-            {/* 6. ACTION CENTER CARD */}
-            <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-xs flex flex-col justify-between">
+            {/* Greeting */}
+            <section className="mb-8 flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
               <div>
-                <h2 className="text-xl font-extrabold text-gray-900 text-center mb-8">
-                  Action Center
-                </h2>
-
-                <div className="space-y-6 px-4">
-                  {recentActions.length > 0 ? recentActions.map((item, idx) => (
-                    <div key={idx} className="flex items-center gap-3 text-base sm:text-lg font-medium text-gray-800">
-                      <span className="text-lg">{item.type === 'task' ? '🔴' : item.type === 'event' ? '🟣' : '🟡'}</span>
-                      <span className="truncate">{item.title}</span>
-                    </div>
-                  )) : (
-                    <div className="text-gray-400 text-center text-sm italic">No suggested actions.</div>
-                  )}
-                </div>
+                <p className="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-teal-300">
+                  YOUR PERSONAL WORKSPACE
+                </p>
+                <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
+                  {greeting}, {firstName}
+                  <span className="text-teal-300">.</span>
+                </h1>
+                <p className="mt-3 text-sm leading-6 text-slate-400">
+                  Here's an overview of the information you've saved.
+                </p>
               </div>
-              
-              <div className="flex justify-start pt-6">
+
+              <Link
+                href="/screenshots"
+                className="inline-flex w-fit items-center gap-2 rounded-xl border border-white/10 px-4 py-3 text-sm font-medium text-slate-300 transition hover:border-teal-400/30 hover:text-teal-300"
+              >
+                Browse screenshots <span>→</span>
+              </Link>
+            </section>
+
+            {/* Overview cards */}
+            <section className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              <StatCard
+                label="Screenshots"
+                value={loadingScreenshots ? "—" : screenshots.length}
+                icon="▧"
+                description="Images in your workspace"
+              />
+              <StatCard
+                label="Favorites"
+                value={loadingScreenshots ? "—" : favoriteCount}
+                icon="☆"
+                description="Screenshots marked as favorites"
+              />
+              <StatCard
+                label="Extracted tasks"
+                value={loadingScreenshots ? "—" : tasks.length}
+                icon="✓"
+                description="Tasks found in your screenshots"
+              />
+              <StatCard
+                label="Detected events"
+                value={loadingScreenshots ? "—" : events.length}
+                icon="◷"
+                description="Events found in saved information"
+              />
+            </section>
+
+            {/* Screenshots and actions */}
+            <section className="mb-6 grid grid-cols-1 gap-5 xl:grid-cols-[1.5fr_0.85fr]">
+              <div className="min-w-0 rounded-2xl border border-white/[0.08] bg-[#101722] p-5 sm:p-6">
+                <div className="mb-6 flex items-center justify-between gap-3">
+                  <div>
+                    <h2 className="text-lg font-semibold">
+                      Recent screenshots
+                    </h2>
+                    <p className="mt-1 text-xs text-slate-500">
+                      Your recently saved images
+                    </p>
+                  </div>
+
+                  <Link
+                    href="/screenshots"
+                    className="shrink-0 text-xs font-semibold text-teal-300 transition hover:text-teal-200"
+                  >
+                    View all →
+                  </Link>
+                </div>
+
+                {loadingScreenshots ? (
+                  <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                    {[1, 2, 3, 4].map((item) => (
+                      <div
+                        key={item}
+                        className="aspect-[4/5] animate-pulse rounded-xl bg-white/[0.04]"
+                      />
+                    ))}
+                  </div>
+                ) : filteredScreenshots.length > 0 ? (
+                  <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 2xl:grid-cols-4">
+                    {filteredScreenshots.slice(0, 8).map((item) => {
+                      const image = getImage(item);
+
+                      return (
+                        <button
+                          type="button"
+                          key={item._id || item.id}
+                          onClick={() => setSelectedScreenshot(item)}
+                          className="group min-w-0 overflow-hidden rounded-xl border border-white/[0.08] bg-[#0b111b] text-left transition hover:border-teal-400/40"
+                        >
+                          <div className="relative aspect-[4/3] overflow-hidden bg-[#151e2b]">
+                            {image ? (
+                              <img
+                                src={image}
+                                alt={getTitle(item)}
+                                className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+                              />
+                            ) : (
+                              <div className="flex h-full items-center justify-center text-3xl text-slate-600">
+                                ▧
+                              </div>
+                            )}
+
+                            {isProcessing(item) && (
+                              <span className="absolute right-2 top-2 rounded-full border border-amber-300/20 bg-black/70 px-2 py-1 text-[10px] text-amber-200">
+                                Processing
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="p-3">
+                            <p className="truncate text-sm font-medium text-slate-200">
+                              {getTitle(item)}
+                            </p>
+                            <p className="mt-1 truncate text-xs text-slate-500">
+                              {getCategory(item)}
+                            </p>
+                            <p className="mt-2 text-[10px] text-slate-600">
+                              {getDate(item)}
+                            </p>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="flex min-h-64 flex-col items-center justify-center rounded-xl border border-dashed border-white/10 px-5 text-center">
+                    <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-teal-400/[0.08] text-2xl text-teal-300">
+                      ▧
+                    </div>
+                    <h3 className="font-semibold text-white">
+                      {searchQuery
+                        ? "No matching screenshots"
+                        : "Your workspace is ready"}
+                    </h3>
+                    <p className="mt-2 max-w-xs text-sm leading-6 text-slate-500">
+                      {searchQuery
+                        ? "Try another search term."
+                        : "Upload an image to start extracting useful information."}
+                    </p>
+
+                    {!searchQuery && (
+                      <label className="mt-5 cursor-pointer rounded-lg bg-teal-400 px-4 py-2.5 text-sm font-semibold text-[#06252a] hover:bg-teal-300">
+                        Upload your first screenshot
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleUpload}
+                          disabled={isUploading}
+                          className="hidden"
+                        />
+                      </label>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Action center */}
+              <div className="rounded-2xl border border-white/[0.08] bg-[#101722] p-5 sm:p-6">
+                <div className="mb-6 flex items-center justify-between">
+                  <div>
+                    <h2 className="text-lg font-semibold">Action center</h2>
+                    <p className="mt-1 text-xs text-slate-500">
+                      Tasks and dates extracted by AI
+                    </p>
+                  </div>
+                  <span className="rounded-lg bg-teal-400/10 px-2.5 py-1.5 text-xs font-semibold text-teal-300">
+                    {recentActions.length}
+                  </span>
+                </div>
+
+                {recentActions.length > 0 ? (
+                  <div className="space-y-3">
+                    {recentActions.map((item, index) => (
+                      <button
+                        type="button"
+                        key={`${item.type}-${index}`}
+                        onClick={() => setSelectedScreenshot(item.source)}
+                        className="flex w-full items-start gap-3 rounded-xl border border-white/[0.06] bg-[#0b111b] p-3 text-left transition hover:border-teal-400/25"
+                      >
+                        <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-teal-400/[0.08] text-teal-300">
+                          {item.type === "task"
+                            ? "✓"
+                            : item.type === "event"
+                              ? "◷"
+                              : "◦"}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block break-words text-sm font-medium text-slate-200">
+                            {item.title}
+                          </span>
+                          {item.date && (
+                            <span className="mt-1 block text-xs text-slate-500">
+                              {item.date}
+                            </span>
+                          )}
+                        </span>
+                        <span className="text-slate-600">↗</span>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="flex min-h-44 flex-col items-center justify-center text-center">
+                    <span className="text-2xl text-slate-600">✓</span>
+                    <p className="mt-3 text-sm font-medium text-slate-300">
+                      Nothing needs your attention yet
+                    </p>
+                    <p className="mt-2 text-xs leading-5 text-slate-500">
+                      Extracted tasks and events will appear here.
+                    </p>
+                  </div>
+                )}
+
                 <Link
                   href="/action-center"
-                  className="inline-flex items-center gap-1.5 text-sm font-semibold text-gray-900 hover:text-indigo-600 transition-colors"
+                  className="mt-5 inline-flex items-center gap-2 text-sm font-semibold text-teal-300 hover:text-teal-200"
                 >
-                  <span>📝 View Inbox →</span>
+                  Open Action Center →
                 </Link>
               </div>
-            </div>
-          </div>
+            </section>
 
-          {/* BOTTOM GRID */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* 7. UPCOMING CARD */}
-            <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-xs flex flex-col justify-between">
-              <div>
-                <h2 className="text-xl font-extrabold text-gray-900 text-center mb-8">
-                  Upcoming
-                </h2>
-
-                <div className="space-y-6 px-4">
-                  {recentActions.length > 0 ? recentActions.map((item, idx) => (
-                    <div key={idx} className="flex flex-col mb-4">
-                       <div className="flex items-center justify-between">
-                         <div className="flex items-center gap-3 text-base font-medium text-gray-800">
-                           <span className="text-lg">{item.icon}</span>
-                           <span className="truncate max-w-[150px] sm:max-w-[200px]">{item.title}</span>
-                         </div>
-                         <button onClick={() => setSelectedScreenshot(item.source)} className="text-xs text-indigo-600 hover:text-indigo-800 font-semibold bg-indigo-50 px-2 py-1 rounded">View</button>
-                       </div>
-                       {item.date && <div className="text-xs text-gray-500 ml-9 mt-1">Date: {item.date}</div>}
-                    </div>
-                  )) : (
-                    <div className="text-gray-400 text-center text-sm italic">No upcoming items.</div>
-                  )}
-                </div>
-              </div>
-              
-              <div className="flex justify-start pt-6">
-                <Link
-                  href="/action-center"
-                  className="inline-flex items-center gap-1.5 text-sm font-semibold text-gray-900 hover:text-indigo-600 transition-colors"
-                >
-                  <span>🔍 View All →</span>
-                </Link>
-              </div>
-            </div>
-
-            {/* 8. SMART INSIGHTS CARD */}
-            <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-xs">
-              <h2 className="text-xl font-extrabold text-gray-900 text-center mb-8">
-                Smart Insights
-              </h2>
-
-              <div className="space-y-6 px-4">
-                <div className="flex items-center gap-3 text-base sm:text-lg font-medium text-gray-800">
-                  <span className="text-lg">📸</span>
-                  <span>20 Screenshots detected as notes</span>
+            {/* Lower information cards */}
+            <section className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+              <div className="rounded-2xl border border-white/[0.08] bg-[#101722] p-5 sm:p-6">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-teal-400/[0.08] text-xl text-teal-300">
+                    ◈
+                  </div>
+                  <div>
+                    <h2 className="font-semibold">AI processing</h2>
+                    <p className="mt-1 text-xs text-slate-500">
+                      Screenshot intelligence status
+                    </p>
+                  </div>
                 </div>
 
-                <div className="flex items-center gap-3 text-base sm:text-lg font-medium text-gray-800">
-                  <span className="text-lg">🧠</span>
-                  <span>5 Possible actions</span>
+                <div className="mt-5 flex items-center justify-between border-t border-white/[0.08] pt-4">
+                  <span className="text-sm text-slate-400">
+                    Currently processing
+                  </span>
+                  <span className="text-lg font-semibold text-white">
+                    {screenshots.filter(isProcessing).length}
+                  </span>
+                </div>
+
+                <div className="mt-3 flex items-center justify-between">
+                  <span className="text-sm text-slate-400">
+                    Completed
+                  </span>
+                  <span className="text-sm font-semibold text-teal-300">
+                    {screenshots.filter(
+                      (item) =>
+                        item.processingPipeline?.overall === "completed"
+                    ).length}
+                  </span>
                 </div>
               </div>
-            </div>
+
+              <div className="rounded-2xl border border-white/[0.08] bg-[#101722] p-5 sm:p-6">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-teal-400/[0.08] text-xl text-teal-300">
+                    ◷
+                  </div>
+                  <div>
+                    <h2 className="font-semibold">Your next step</h2>
+                    <p className="mt-1 text-xs text-slate-500">
+                      Make more of what you save
+                    </p>
+                  </div>
+                </div>
+
+                <p className="mt-5 text-sm leading-6 text-slate-400">
+                  Review your saved screenshots and the tasks or events
+                  identified in them.
+                </p>
+
+                <div className="mt-5 flex flex-wrap gap-3">
+                  <Link
+                    href="/screenshots"
+                    className="rounded-lg border border-white/10 px-3 py-2 text-xs font-semibold text-slate-300 transition hover:border-teal-400/30 hover:text-teal-300"
+                  >
+                    Browse screenshots
+                  </Link>
+                  <Link
+                    href="/action-center"
+                    className="rounded-lg bg-teal-400 px-3 py-2 text-xs font-semibold text-[#06252a] transition hover:bg-teal-300"
+                  >
+                    Review actions
+                  </Link>
+                </div>
+              </div>
+            </section>
+
+            <footer className="mt-10 border-t border-white/[0.06] pt-5 text-center text-xs text-slate-600">
+              ReSurface · AI Screenshot Intelligence Platform
+            </footer>
           </div>
         </main>
       </div>
 
-      {/* REUSED SCREENSHOT DETAILS MODAL */}
       {selectedScreenshot && (
         <ScreenshotDetailsModal
           screenshot={selectedScreenshot}
           onClose={() => setSelectedScreenshot(null)}
-          onDelete={handleDeleteScreenshot}
+          onDelete={handleDelete}
         />
       )}
     </div>

@@ -1,6 +1,6 @@
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL ||
-  'http://localhost:5000/api/v1';
+  'http://localhost:5001/api/v1';
 
 /**
  * Get stored authentication token
@@ -651,4 +651,56 @@ export async function deleteCalendarEventApi(
   }
 
   return data;
+}
+
+/**
+ * Send email verification OTP
+ */
+export async function sendVerificationOtpApi({ email }) {
+  const response = await fetch(
+    `${API_BASE_URL}/auth/send-otp`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ email }),
+    }
+  )
+
+  const data = await response.json()
+
+  if (!response.ok) {
+    throw new Error(
+      data.message || 'Failed to send verification code'
+    )
+  }
+
+  return data
+}
+
+/**
+ * Verify email using the six-digit OTP
+ */
+export async function verifyEmailOtpApi({ email, otp }) {
+  const response = await fetch(
+    `${API_BASE_URL}/auth/verify-otp`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ email, otp }),
+    }
+  )
+
+  const data = await response.json()
+
+  if (!response.ok) {
+    throw new Error(
+      data.message || 'Email verification failed'
+    )
+  }
+
+  return data
 }
