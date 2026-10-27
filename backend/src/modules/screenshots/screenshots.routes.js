@@ -1,26 +1,82 @@
+
 import { Router } from 'express'
 import * as screenshotsController from './screenshots.controller.js'
 import authenticateToken from '../../middleware/auth.js'
 import { uploadSingle } from '../../middleware/upload.js'
+import { uploadLimiter } from '../../middleware/rateLimiter.js'
+import { validateFileSignature } from '../../middleware/fileSignature.js'
+import { validateRequest } from '../../middleware/validator.js'
+import {
+  updateDateSchema,
+  dismissActionItemSchema,
+} from './screenshots.validation.js'
+import { unlockVault } from './vault.controller.js'
+import requireVaultAccess from '../../middleware/requireVaultAccess.js'
 
 const router = Router()
 
-// All routes are protected by JWT auth middleware
+// All routes require normal user authentication
 router.use(authenticateToken)
 
-// Upload
-router.post('/upload', uploadSingle, screenshotsController.uploadScreenshot)
+// Unlock Vault using the existing ReSurface account password
+router.post('/vault/unlock', unlockVault)
 
-// Vault — MUST come before /:id
-router.get('/vault', screenshotsController.getVaultScreenshots)
-router.patch('/:id/vault', screenshotsController.toggleVault)
+// Upload screenshot
+router.post(
+  '/upload',
+  uploadLimiter,
+  uploadSingle,
+  validateFileSignature,
+  screenshotsController.uploadScreenshot
+)
 
-// Screenshots
+// Vault routes — keep these before /:id
+router.get(
+  '/vault',
+  requireVaultAccess,
+  screenshotsController.getVaultScreenshots
+)
+
+router.patch(
+  '/:id/vault',
+  requireVaultAccess,
+  screenshotsController.toggleVault
+)
+
+// Regular screenshot routes
 router.get('/', screenshotsController.getScreenshots)
-router.get('/:id', screenshotsController.getScreenshotById)
+
+router.get(
+  '/:id',
+  (req, res, next) => {
+    const vaultToken = req.headers['x-vault-token'];
+
+    // Regular screenshots continue normally.
+    // Vault screenshots are verified by the controller's access check.
+    if (!vaultToken) {
+      return next();
+    }
+
+    // Verify the Vault token and set req.vaultUnlocked.
+    return requireVaultAccess(req, res, next);
+  },
+  screenshotsController.getScreenshotById
+);
+
 router.patch('/:id/favorite', screenshotsController.toggleFavorite)
-router.patch('/:id/dismiss', screenshotsController.dismissActionItem)
-router.put('/:id/date', screenshotsController.updateExtractedDate)
+
+router.patch(
+  '/:id/dismiss',
+  validateRequest({ body: dismissActionItemSchema }),
+  screenshotsController.dismissActionItem
+)
+
+router.put(
+  '/:id/date',
+  validateRequest({ body: updateDateSchema }),
+  screenshotsController.updateExtractedDate
+)
+
 router.delete('/:id', screenshotsController.deleteScreenshot)
 
 export default router

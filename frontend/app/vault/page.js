@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect } from "react";
@@ -8,6 +9,9 @@ import {
     fetchVaultApi,
     toggleVaultApi,
     fetchScreenshotByIdApi,
+    getVaultToken,
+    unlockVaultApi,
+    clearVaultToken,
 } from "../utils/api";
 
 import ScreenshotDetailsModal from "../components/ScreenshotDetailsModal";
@@ -22,20 +26,50 @@ export default function VaultPage() {
     const [error, setError] = useState("");
     const [removingId, setRemovingId] = useState(null);
 
-    // Selected screenshot for View modal
     const [selectedScreenshot, setSelectedScreenshot] = useState(null);
     const [viewLoading, setViewLoading] = useState(false);
 
-    // Load Vault items from backend
-    useEffect(() => {
-        const loadVaultItems = async () => {
-            if (!isAuthenticated) return;
+    // Vault unlock state
+    const [isVaultUnlocked, setIsVaultUnlocked] = useState(false);
+    const [vaultPassword, setVaultPassword] = useState("");
+    const [unlocking, setUnlocking] = useState(false);
+    const [unlockError, setUnlockError] = useState("");
 
+    // Load Vault only after authentication and Vault unlock
+    useEffect(() => {
+        if (isLoading) return;
+
+        if (!isAuthenticated) {
+            setLoading(false);
+            setVaultItems([]);
+            return;
+        }
+
+        const vaultToken = getVaultToken();
+
+        if (!vaultToken) {
+            setIsVaultUnlocked(false);
+            setLoading(false);
+            setVaultItems([]);
+            return;
+        }
+
+        // If a token already exists, enable the Vault first.
+        if (!isVaultUnlocked) {
+            setIsVaultUnlocked(true);
+            return;
+        }
+
+        let cancelled = false;
+
+        const loadVaultItems = async () => {
             try {
                 setLoading(true);
                 setError("");
 
                 const response = await fetchVaultApi();
+
+                if (cancelled) return;
 
                 if (response?.data && Array.isArray(response.data)) {
                     setVaultItems(response.data);
@@ -43,15 +77,62 @@ export default function VaultPage() {
                     setVaultItems([]);
                 }
             } catch (err) {
+                if (cancelled) return;
+
                 console.error("Error loading Vault:", err);
                 setError(err.message || "Failed to load Vault");
+
+                if (err.status === 403) {
+                    clearVaultToken();
+                    setIsVaultUnlocked(false);
+                    setVaultItems([]);
+                }
             } finally {
-                setLoading(false);
+                if (!cancelled) {
+                    setLoading(false);
+                }
             }
         };
 
         loadVaultItems();
-    }, [isAuthenticated]);
+
+        return () => {
+            cancelled = true;
+        };
+    }, [isAuthenticated, isLoading, isVaultUnlocked]);
+
+    // Unlock Vault using the existing account password
+    const handleUnlockVault = async (event) => {
+        event.preventDefault();
+
+        if (!vaultPassword.trim()) {
+            setUnlockError("Please enter your account password.");
+            return;
+        }
+
+        try {
+            setUnlocking(true);
+            setUnlockError("");
+            setError("");
+
+            await unlockVaultApi(vaultPassword);
+
+            setVaultPassword("");
+            setIsVaultUnlocked(true);
+        } catch (err) {
+            console.error("Vault unlock failed:", err);
+            setUnlockError(
+                err.message || "Unable to unlock Vault."
+            );
+        } finally {
+            setUnlocking(false);
+        }
+    };
+
+    // Get MongoDB ID
+    const getItemId = (item) => {
+        return item?._id || item?.id;
+    };
 
     // Remove screenshot from Vault
     const handleRemoveFromVault = async (id) => {
@@ -71,21 +152,20 @@ export default function VaultPage() {
             );
         } catch (err) {
             console.error("Error removing Vault item:", err);
+
+            if (err.status === 403) {
+                clearVaultToken();
+                setIsVaultUnlocked(false);
+                setVaultItems([]);
+            }
+
             alert(err.message || "Failed to remove item from Vault");
         } finally {
             setRemovingId(null);
         }
     };
 
-    // Get MongoDB ID
-    const getItemId = (item) => {
-        return item?._id || item?.id;
-    };
-
-    // =========================================================
-    // VIEW VAULT SCREENSHOT
-    // =========================================================
-
+    // View a protected screenshot
     const handleViewScreenshot = async (id) => {
         if (!id) {
             alert("Screenshot ID not found.");
@@ -94,8 +174,6 @@ export default function VaultPage() {
 
         try {
             setViewLoading(true);
-
-            console.log("Opening Vault screenshot:", id);
 
             const response = await fetchScreenshotByIdApi(id);
 
@@ -107,15 +185,19 @@ export default function VaultPage() {
         } catch (err) {
             console.error("Error loading Vault screenshot:", err);
 
-            alert(
-                err.message || "Failed to load protected screenshot."
-            );
+            if (err.status === 403) {
+                clearVaultToken();
+                setIsVaultUnlocked(false);
+                setVaultItems([]);
+            }
+
+            alert(err.message || "Failed to load protected screenshot.");
         } finally {
             setViewLoading(false);
         }
     };
 
-    // Get title from screenshot
+    // Get screenshot title
     const getTitle = (item) => {
         return (
             item?.aiAnalysis?.title ||
@@ -187,9 +269,7 @@ export default function VaultPage() {
 
     // Category counts
     const passwordCount = vaultItems.filter((item) => {
-        const text = `${getTitle(item)} ${getCategory(item)} ${getTags(item).join(
-            " "
-        )}`.toLowerCase();
+        const text = `${getTitle(item)} ${getCategory(item)} ${getTags(item).join(" ")}`.toLowerCase();
 
         return (
             text.includes("password") ||
@@ -199,9 +279,7 @@ export default function VaultPage() {
     }).length;
 
     const cardCount = vaultItems.filter((item) => {
-        const text = `${getTitle(item)} ${getCategory(item)} ${getTags(item).join(
-            " "
-        )}`.toLowerCase();
+        const text = `${getTitle(item)} ${getCategory(item)} ${getTags(item).join(" ")}`.toLowerCase();
 
         return (
             text.includes("card") ||
@@ -211,9 +289,7 @@ export default function VaultPage() {
     }).length;
 
     const bankCount = vaultItems.filter((item) => {
-        const text = `${getTitle(item)} ${getCategory(item)} ${getTags(item).join(
-            " "
-        )}`.toLowerCase();
+        const text = `${getTitle(item)} ${getCategory(item)} ${getTags(item).join(" ")}`.toLowerCase();
 
         return (
             text.includes("bank") ||
@@ -223,9 +299,7 @@ export default function VaultPage() {
     }).length;
 
     const documentCount = vaultItems.filter((item) => {
-        const text = `${getTitle(item)} ${getCategory(item)} ${getTags(item).join(
-            " "
-        )}`.toLowerCase();
+        const text = `${getTitle(item)} ${getCategory(item)} ${getTags(item).join(" ")}`.toLowerCase();
 
         return (
             text.includes("document") ||
@@ -240,9 +314,7 @@ export default function VaultPage() {
     if (isLoading) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-gray-50">
-                <div className="text-gray-500">
-                    Loading Vault...
-                </div>
+                <div className="text-gray-500">Loading Vault...</div>
             </div>
         );
     }
@@ -273,14 +345,76 @@ export default function VaultPage() {
         );
     }
 
+    // Password unlock screen
+    if (!isVaultUnlocked) {
+        return (
+            <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
+                <form
+                    onSubmit={handleUnlockVault}
+                    className="w-full max-w-md bg-white border border-gray-200 rounded-2xl p-8 shadow-sm"
+                >
+                    <div className="text-5xl text-center mb-4">
+                        🔒
+                    </div>
+
+                    <h1 className="text-2xl font-extrabold text-center text-gray-900">
+                        Unlock Your Vault
+                    </h1>
+
+                    <p className="text-sm text-gray-500 text-center mt-3 mb-6">
+                        Enter your ReSurface account password to access your protected screenshots.
+                    </p>
+
+                    <label
+                        htmlFor="vault-password"
+                        className="block text-sm font-semibold text-gray-700 mb-2"
+                    >
+                        Account password
+                    </label>
+
+                    <input
+                        id="vault-password"
+                        type="password"
+                        autoComplete="current-password"
+                        value={vaultPassword}
+                        onChange={(event) => setVaultPassword(event.target.value)}
+                        placeholder="Enter your password"
+                        className="w-full border border-gray-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        disabled={unlocking}
+                        required
+                    />
+
+                    {unlockError && (
+                        <p className="text-sm text-red-600 mt-3" role="alert">
+                            {unlockError}
+                        </p>
+                    )}
+
+                    <button
+                        type="submit"
+                        disabled={unlocking}
+                        className="w-full mt-5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-5 py-3 rounded-xl disabled:opacity-60"
+                    >
+                        {unlocking ? "Unlocking..." : "Unlock Vault"}
+                    </button>
+
+                    <button
+                        type="button"
+                        onClick={() => router.push("/dashboard")}
+                        className="w-full mt-3 text-gray-600 hover:text-gray-900 px-5 py-2"
+                    >
+                        Back to Dashboard
+                    </button>
+                </form>
+            </div>
+        );
+    }
+
     return (
         <div className="min-h-screen bg-gray-50 text-gray-900 font-sans">
-
             {/* HEADER */}
             <header className="sticky top-0 z-40 bg-white border-b border-gray-200 px-4 sm:px-8 py-4 flex items-center justify-between shadow-sm">
-
                 <div className="flex items-center gap-3">
-
                     <button
                         onClick={() => router.push("/dashboard")}
                         className="p-2 rounded-lg hover:bg-gray-100 transition"
@@ -297,21 +431,17 @@ export default function VaultPage() {
                             Your private information
                         </p>
                     </div>
-
                 </div>
 
                 <div className="text-sm text-gray-600 hidden sm:block">
                     {user?.email}
                 </div>
-
             </header>
 
             {/* MAIN */}
             <main className="max-w-7xl mx-auto p-4 sm:p-8">
-
                 {/* INTRO */}
                 <section className="mb-8">
-
                     <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
                         Your Secure Vault 🔐
                     </h2>
@@ -320,14 +450,11 @@ export default function VaultPage() {
                         Sensitive screenshots detected from your existing uploads are
                         stored here securely.
                     </p>
-
                 </section>
 
                 {/* SEARCH */}
                 <div className="flex flex-col sm:flex-row gap-3 mb-8">
-
                     <div className="relative flex-1">
-
                         <span className="absolute left-4 top-3 text-gray-400">
                             🔍
                         </span>
@@ -339,14 +466,11 @@ export default function VaultPage() {
                             onChange={(e) => setSearchQuery(e.target.value)}
                             className="w-full bg-white border border-gray-300 rounded-xl py-3 pl-11 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                         />
-
                     </div>
-
                 </div>
 
                 {/* CATEGORY CARDS */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-10">
-
                     <CategoryCard
                         icon="🔑"
                         title="Passwords"
@@ -370,48 +494,34 @@ export default function VaultPage() {
                         title="Documents"
                         count={`${documentCount} items`}
                     />
-
                 </div>
 
                 {/* SECURITY NOTICE */}
                 <div className="bg-indigo-50 border border-indigo-200 rounded-2xl p-5 mb-8">
-
                     <div className="flex items-start gap-3">
-
-                        <span className="text-2xl">
-                            🛡️
-                        </span>
+                        <span className="text-2xl">🛡️</span>
 
                         <div>
-
                             <h3 className="font-bold text-indigo-900">
                                 Your information is protected
                             </h3>
 
                             <p className="text-sm text-indigo-700 mt-1">
                                 Sensitive information is hidden by default. Only screenshots
-                                already uploaded to RESecure can appear here. No second upload
+                                already uploaded to ReSurface can appear here. No second upload
                                 is required.
                             </p>
-
                         </div>
-
                     </div>
-
                 </div>
 
                 {/* ERROR */}
                 {error && (
                     <div className="bg-red-50 border border-red-200 rounded-2xl p-5 mb-8">
-
                         <div className="flex items-start gap-3">
-
-                            <span className="text-xl">
-                                ⚠️
-                            </span>
+                            <span className="text-xl">⚠️</span>
 
                             <div>
-
                                 <h3 className="font-bold text-red-900">
                                     Failed to load Vault
                                 </h3>
@@ -420,20 +530,24 @@ export default function VaultPage() {
                                     {error}
                                 </p>
 
+                                <button
+                                    onClick={() => {
+                                        setError("");
+                                        setIsVaultUnlocked(false);
+                                    }}
+                                    className="mt-3 text-sm font-semibold text-red-800 underline"
+                                >
+                                    Unlock Vault again
+                                </button>
                             </div>
-
                         </div>
-
                     </div>
                 )}
 
                 {/* RECENT ITEMS */}
                 <section>
-
                     <div className="flex items-center justify-between mb-5">
-
                         <div>
-
                             <h2 className="text-xl font-extrabold">
                                 Recent Items
                             </h2>
@@ -441,23 +555,17 @@ export default function VaultPage() {
                             <p className="text-sm text-gray-500 mt-1">
                                 Your recently protected screenshots
                             </p>
-
                         </div>
 
                         <span className="text-sm text-gray-500">
                             {filteredItems.length} items
                         </span>
-
                     </div>
 
                     {/* LOADING */}
                     {loading ? (
-
                         <div className="bg-white border border-gray-200 rounded-2xl p-10 text-center">
-
-                            <div className="text-3xl mb-3">
-                                🔄
-                            </div>
+                            <div className="text-3xl mb-3">🔄</div>
 
                             <h3 className="font-bold text-lg">
                                 Loading Vault...
@@ -466,32 +574,22 @@ export default function VaultPage() {
                             <p className="text-sm text-gray-500 mt-1">
                                 Fetching your protected screenshots.
                             </p>
-
                         </div>
-
                     ) : filteredItems.length === 0 ? (
-
                         /* EMPTY STATE */
                         <div className="bg-white border border-gray-200 rounded-2xl p-10 text-center">
-
-                            <div className="text-5xl mb-4">
-                                🔐
-                            </div>
+                            <div className="text-5xl mb-4">🔐</div>
 
                             <h3 className="font-bold text-lg">
-
                                 {searchQuery
                                     ? "No matching items found"
                                     : "Your Vault is empty"}
-
                             </h3>
 
                             <p className="text-sm text-gray-500 mt-2 max-w-md mx-auto">
-
                                 {searchQuery
                                     ? "Try a different search."
                                     : "When a screenshot contains sensitive information, it can be moved into your Vault without uploading the image again."}
-
                             </p>
 
                             {!searchQuery && (
@@ -502,16 +600,11 @@ export default function VaultPage() {
                                     View Screenshots
                                 </button>
                             )}
-
                         </div>
-
                     ) : (
-
                         /* ITEMS */
                         <div className="space-y-4">
-
                             {filteredItems.map((item) => (
-
                                 <VaultItem
                                     key={getItemId(item)}
                                     item={item}
@@ -522,44 +615,25 @@ export default function VaultPage() {
                                     updated={formatDate(
                                         item.updatedAt || item.createdAt
                                     )}
-                                    removing={
-                                        removingId === getItemId(item)
-                                    }
+                                    removing={removingId === getItemId(item)}
                                     onRemove={() =>
-                                        handleRemoveFromVault(
-                                            getItemId(item)
-                                        )
+                                        handleRemoveFromVault(getItemId(item))
                                     }
-
-                                    // IMPORTANT:
-                                    // Open the exact Vault screenshot
-                                    // instead of navigating to /screenshots
                                     onOpen={() =>
-                                        handleViewScreenshot(
-                                            getItemId(item)
-                                        )
+                                        handleViewScreenshot(getItemId(item))
                                     }
                                 />
-
                             ))}
-
                         </div>
-
                     )}
-
                 </section>
-
             </main>
 
             {/* VIEW LOADING */}
             {viewLoading && (
                 <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/30 backdrop-blur-sm">
-
                     <div className="bg-white rounded-2xl px-8 py-6 shadow-xl text-center">
-
-                        <div className="text-3xl mb-3">
-                            🔐
-                        </div>
+                        <div className="text-3xl mb-3">🔐</div>
 
                         <h3 className="font-bold text-gray-900">
                             Opening protected screenshot...
@@ -568,9 +642,7 @@ export default function VaultPage() {
                         <p className="text-sm text-gray-500 mt-1">
                             Please wait.
                         </p>
-
                     </div>
-
                 </div>
             )}
 
@@ -581,11 +653,9 @@ export default function VaultPage() {
                     onClose={() => setSelectedScreenshot(null)}
                 />
             )}
-
         </div>
     );
 }
-
 
 /* =========================================================
    CATEGORY CARD
@@ -594,31 +664,22 @@ export default function VaultPage() {
 function CategoryCard({ icon, title, count }) {
     return (
         <div className="bg-white border border-gray-200 rounded-2xl p-5 hover:border-indigo-300 hover:shadow-md transition">
-
             <div className="flex items-center justify-between">
-
-                <div className="text-3xl">
-                    {icon}
-                </div>
+                <div className="text-3xl">{icon}</div>
 
                 <span className="text-xs font-semibold bg-gray-100 text-gray-600 px-2.5 py-1 rounded-full">
                     {count}
                 </span>
-
             </div>
 
-            <h3 className="font-bold text-lg mt-4">
-                {title}
-            </h3>
+            <h3 className="font-bold text-lg mt-4">{title}</h3>
 
             <p className="text-sm text-gray-500 mt-1">
                 Securely stored
             </p>
-
         </div>
     );
 }
-
 
 /* =========================================================
    VAULT ITEM
@@ -635,39 +696,26 @@ function VaultItem({
     onRemove,
     onOpen,
 }) {
-
     return (
         <div className="bg-white border border-gray-200 rounded-2xl p-5 hover:shadow-md transition">
-
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-5">
-
                 {/* LEFT */}
                 <div className="flex items-center gap-4 min-w-0">
-
                     {/* IMAGE */}
                     <div className="h-16 w-16 rounded-xl bg-indigo-50 border border-indigo-100 overflow-hidden flex items-center justify-center shrink-0">
-
                         {imageUrl ? (
-
                             <img
                                 src={imageUrl}
                                 alt="Protected screenshot"
                                 className="w-full h-full object-cover"
                             />
-
                         ) : (
-
-                            <span className="text-2xl">
-                                🔒
-                            </span>
-
+                            <span className="text-2xl">🔒</span>
                         )}
-
                     </div>
 
                     {/* DETAILS */}
                     <div className="min-w-0">
-
                         <h3 className="font-bold text-gray-900 truncate">
                             {title}
                         </h3>
@@ -677,33 +725,23 @@ function VaultItem({
                         </p>
 
                         {tags.length > 0 && (
-
                             <div className="flex flex-wrap gap-1.5 mt-2">
-
                                 {tags.slice(0, 3).map((tag, index) => (
-
                                     <span
                                         key={`${tag}-${index}`}
                                         className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-md"
                                     >
                                         {tag}
                                     </span>
-
                                 ))}
-
                             </div>
-
                         )}
-
                     </div>
-
                 </div>
 
                 {/* RIGHT */}
                 <div className="flex flex-col sm:items-end gap-3 shrink-0">
-
                     <div className="flex items-center gap-2">
-
                         <span className="text-sm font-semibold text-gray-700">
                             🔒 Protected
                         </span>
@@ -711,11 +749,9 @@ function VaultItem({
                         <span className="text-xs text-gray-400">
                             {updated}
                         </span>
-
                     </div>
 
                     <div className="flex items-center gap-2">
-
                         {/* VIEW */}
                         <button
                             onClick={onOpen}
@@ -732,13 +768,9 @@ function VaultItem({
                         >
                             {removing ? "Removing..." : "Remove"}
                         </button>
-
                     </div>
-
                 </div>
-
             </div>
-
         </div>
     );
 }

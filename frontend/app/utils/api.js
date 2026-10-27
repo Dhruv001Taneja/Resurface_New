@@ -25,6 +25,68 @@ export const setStoredToken = (token) => {
 };
 
 /**
+ * Vault-specific session token helpers
+ */
+export const getVaultToken = () => {
+  if (typeof window === 'undefined') return null;
+  return sessionStorage.getItem('resurface_vault_token');
+};
+
+export const setVaultToken = (token) => {
+  if (typeof window === 'undefined') return;
+
+  if (token) {
+    sessionStorage.setItem('resurface_vault_token', token);
+  } else {
+    sessionStorage.removeItem('resurface_vault_token');
+  }
+};
+
+export const clearVaultToken = () => {
+  setVaultToken(null);
+};
+
+/**
+ * Unlock Vault using the existing account password
+ */
+export async function unlockVaultApi(password) {
+  const authToken = getStoredToken();
+
+  if (!authToken) {
+    throw new Error('Not authenticated');
+  }
+
+  const response = await fetch(
+    `${API_BASE_URL}/screenshots/vault/unlock`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${authToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ password }),
+    }
+  );
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    const error = new Error(
+      data.message || 'Failed to unlock Vault'
+    );
+    error.status = response.status;
+    throw error;
+  }
+
+  if (!data.vaultToken) {
+    throw new Error('Vault token was not returned by the server');
+  }
+
+  setVaultToken(data.vaultToken);
+  return data;
+}
+
+/**
  * Get stored user
  */
 export const getStoredUser = () => {
@@ -264,38 +326,52 @@ export async function uploadScreenshotApi(
 /**
  * Fetch screenshot by ID
  */
-export async function fetchScreenshotByIdApi(
-  id
-) {
+
+export async function fetchScreenshotByIdApi(id) {
   const authToken = getStoredToken();
 
   if (!authToken) {
     throw new Error('Not authenticated');
   }
 
+  const vaultToken = getVaultToken();
+
+  const headers = {
+    Authorization: `Bearer ${authToken}`,
+    'Content-Type': 'application/json',
+  };
+
+  if (vaultToken) {
+    headers['X-Vault-Token'] = vaultToken;
+  }
+
   const response = await fetch(
     `${API_BASE_URL}/screenshots/${id}`,
     {
       method: 'GET',
-      headers: {
-        Authorization: `Bearer ${authToken}`,
-        'Content-Type': 'application/json',
-      },
+      headers,
     }
   );
 
   const data = await response.json();
 
   if (!response.ok) {
-    throw new Error(
-      data.error ||
+    if (response.status === 403) {
+      clearVaultToken();
+    }
+
+    const error = new Error(
       data.message ||
+      data.error ||
       'Failed to fetch screenshot details'
     );
+    error.status = response.status;
+    throw error;
   }
 
   return data;
 }
+
 
 /**
  * Delete screenshot by ID
@@ -342,17 +418,20 @@ export async function deleteScreenshotApi(
 /**
  * Fetch screenshots that are stored in Vault
  */
-export async function fetchVaultApi(
-  params = {}
-) {
+
+export async function fetchVaultApi(params = {}) {
   const authToken = getStoredToken();
+  const vaultToken = getVaultToken();
 
   if (!authToken) {
     throw new Error('Not authenticated');
   }
 
-  const query =
-    new URLSearchParams(params).toString();
+  if (!vaultToken) {
+    throw new Error('Unlock Vault to continue.');
+  }
+
+  const query = new URLSearchParams(params).toString();
 
   const response = await fetch(
     `${API_BASE_URL}/screenshots/vault?${query}`,
@@ -360,6 +439,7 @@ export async function fetchVaultApi(
       method: 'GET',
       headers: {
         Authorization: `Bearer ${authToken}`,
+        'X-Vault-Token': vaultToken,
         'Content-Type': 'application/json',
       },
     }
@@ -368,11 +448,17 @@ export async function fetchVaultApi(
   const data = await response.json();
 
   if (!response.ok) {
-    throw new Error(
-      data.error ||
+    if (response.status === 403) {
+      clearVaultToken();
+    }
+
+    const error = new Error(
       data.message ||
+      data.error ||
       'Failed to fetch Vault items'
     );
+    error.status = response.status;
+    throw error;
   }
 
   return data;
@@ -382,13 +468,17 @@ export async function fetchVaultApi(
  * Move an existing screenshot
  * into or out of Vault
  */
-export async function toggleVaultApi(
-  id
-) {
+
+export async function toggleVaultApi(id) {
   const authToken = getStoredToken();
+  const vaultToken = getVaultToken();
 
   if (!authToken) {
     throw new Error('Not authenticated');
+  }
+
+  if (!vaultToken) {
+    throw new Error('Unlock Vault to continue.');
   }
 
   const response = await fetch(
@@ -397,6 +487,7 @@ export async function toggleVaultApi(
       method: 'PATCH',
       headers: {
         Authorization: `Bearer ${authToken}`,
+        'X-Vault-Token': vaultToken,
         'Content-Type': 'application/json',
       },
     }
@@ -405,11 +496,17 @@ export async function toggleVaultApi(
   const data = await response.json();
 
   if (!response.ok) {
-    throw new Error(
-      data.error ||
+    if (response.status === 403) {
+      clearVaultToken();
+    }
+
+    const error = new Error(
       data.message ||
+      data.error ||
       'Failed to update Vault status'
     );
+    error.status = response.status;
+    throw error;
   }
 
   return data;
