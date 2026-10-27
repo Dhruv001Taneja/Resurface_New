@@ -39,14 +39,29 @@ const connectDB = async () => {
     isListenersAttached = true
   }
 
+  const isAtlasOrTls =
+    uri.startsWith('mongodb+srv://') ||
+    uri.includes('tls=true') ||
+    uri.includes('ssl=true')
+
+  const connectionOptions = {
+    serverSelectionTimeoutMS: 15000,
+    ...(isAtlasOrTls && {
+      tls: true,
+      tlsAllowInvalidCertificates: false,
+    }),
+  }
+
+  if (isAtlasOrTls) {
+    logger.info('🔒 Enforcing secure TLS connection for MongoDB Atlas')
+  }
+
   try {
-    const conn = await mongoose.connect(uri, {
-      serverSelectionTimeoutMS: 15000,
-    })
-    logger.info(`✅ MongoDB Connected: Host=${conn.connection.host}, DB=${conn.connection.name}`)
+    const conn = await mongoose.connect(uri, connectionOptions)
+    logger.info(`✅ MongoDB Connected (TLS: ${isAtlasOrTls ? 'Enforced' : 'Default'}): Host=${conn.connection.host}, DB=${conn.connection.name}`)
     return conn
   } catch (error) {
-    logger.error(`❌ MongoDB Atlas connection failed: ${error.message}`)
+    logger.error(`❌ MongoDB connection failed: ${error.message}`)
     throw error
   }
 }

@@ -21,7 +21,7 @@ router.use(authenticateToken)
 // Unlock Vault using the existing ReSurface account password
 router.post('/vault/unlock', unlockVault)
 
-// Upload screenshot
+// Upload screenshot with rate limiting and file signature validation
 router.post(
   '/upload',
   uploadLimiter,
@@ -49,19 +49,18 @@ router.get('/', screenshotsController.getScreenshots)
 router.get(
   '/:id',
   (req, res, next) => {
-    const vaultToken = req.headers['x-vault-token'];
+    const vaultToken = req.headers['x-vault-token']
 
     // Regular screenshots continue normally.
-    // Vault screenshots are verified by the controller's access check.
     if (!vaultToken) {
-      return next();
+      return next()
     }
 
-    // Verify the Vault token and set req.vaultUnlocked.
-    return requireVaultAccess(req, res, next);
+    // Verify the Vault token before accessing a protected screenshot.
+    return requireVaultAccess(req, res, next)
   },
   screenshotsController.getScreenshotById
-);
+)
 
 router.patch('/:id/favorite', screenshotsController.toggleFavorite)
 

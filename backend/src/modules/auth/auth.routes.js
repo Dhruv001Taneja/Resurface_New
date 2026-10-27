@@ -1,15 +1,17 @@
-
 import { Router } from 'express'
 import rateLimit from 'express-rate-limit'
 import * as authController from './auth.controller.js'
 import authenticateToken from '../../middleware/auth.js'
+import { authLimiter } from '../../middleware/rateLimiter.js'
+import { validateRequest } from '../../middleware/validator.js'
+import { registerSchema, loginSchema } from './auth.validation.js'
 
 const router = Router()
 
 // Limit repeated login attempts from the same IP address.
 const loginLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    limit: 5, // Maximum 5 requests per window
+    windowMs: 15 * 60 * 1000,
+    limit: 5,
     standardHeaders: 'draft-8',
     legacyHeaders: false,
     message: {
@@ -30,9 +32,22 @@ const otpRequestLimiter = rateLimit({
     },
 })
 
-// Public routes
-router.post('/register', authController.register)
-router.post('/login', loginLimiter, authController.login)
+// Public routes with rate limiting and input validation.
+router.post(
+    '/register',
+    authLimiter,
+    validateRequest({ body: registerSchema }),
+    authController.register
+)
+
+router.post(
+    '/login',
+    authLimiter,
+    loginLimiter,
+    validateRequest({ body: loginSchema }),
+    authController.login
+)
+
 router.post(
     '/send-otp',
     otpRequestLimiter,
@@ -41,7 +56,7 @@ router.post(
 
 router.post('/verify-otp', authController.verifyEmail)
 
-// Protected routes
+// Protected routes.
 router.get('/me', authenticateToken, authController.getMe)
 router.post('/logout', authenticateToken, authController.logout)
 

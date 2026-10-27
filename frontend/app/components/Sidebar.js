@@ -81,29 +81,38 @@ export default function Sidebar({
             Workspace
           </p>
 
-          <nav className="space-y-1">
-            {navigation.map((item) => {
-              const active =
-                pathname === item.href ||
-                (item.href !== "/dashboard" &&
-                  pathname.startsWith(`${item.href}/`));
+          <Link
+            href="/dashboard"
+            className="mb-4 block px-3 text-xl font-extrabold tracking-tight text-slate-100 transition-colors hover:text-[#45e5d0]"
+          >
+            ReSurface
+          </Link>
 
-              return (
-                <Link
-                  key={item.name}
-                  href={item.href}
-                  onClick={() => setMobileMenuOpen?.(false)}
-                  className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-sm transition-colors ${active
+          <nav className="space-y-1">
+
+            <nav className="space-y-1">
+              {navigation.map((item) => {
+                const active =
+                  pathname === item.href ||
+                  (item.href !== "/dashboard" &&
+                    pathname.startsWith(`${item.href}/`));
+
+                return (
+                  <Link
+                    key={item.name}
+                    href={item.href}
+                    onClick={() => setMobileMenuOpen?.(false)}
+                    className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-sm transition-colors ${active
                       ? "border border-teal-400/15 bg-teal-400/10 font-semibold text-teal-300"
                       : "text-slate-400 hover:bg-white/[0.05] hover:text-white"
-                    }`}
-                >
-                  <SidebarIcon name={item.icon} />
-                  <span>{item.name}</span>
-                </Link>
-              );
-            })}
-          </nav>
+                      }`}
+                  >
+                    <SidebarIcon name={item.icon} />
+                    <span>{item.name}</span>
+                  </Link>
+                );
+              })}
+            </nav>
         </div>
 
         <div className="border-t border-white/[0.08] p-5">
