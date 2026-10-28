@@ -1,4 +1,3 @@
-
 "use client";
 
 import React from "react";
@@ -88,31 +87,29 @@ export default function Sidebar({
             ReSurface
           </Link>
 
-          <nav className="space-y-1">
-
             <nav className="space-y-1">
-              {navigation.map((item) => {
-                const active =
-                  pathname === item.href ||
-                  (item.href !== "/dashboard" &&
-                    pathname.startsWith(`${item.href}/`));
+            {navigation.map((item) => {
+              const active =
+                pathname === item.href ||
+                (item.href !== "/dashboard" &&
+                  pathname.startsWith(`${item.href}/`));
 
-                return (
-                  <Link
-                    key={item.name}
-                    href={item.href}
-                    onClick={() => setMobileMenuOpen?.(false)}
-                    className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-sm transition-colors ${active
-                      ? "border border-teal-400/15 bg-teal-400/10 font-semibold text-teal-300"
-                      : "text-slate-400 hover:bg-white/[0.05] hover:text-white"
-                      }`}
-                  >
-                    <SidebarIcon name={item.icon} />
-                    <span>{item.name}</span>
-                  </Link>
-                );
-              })}
-            </nav>
+              return (
+                <Link
+                  key={item.name}
+                  href={item.href}
+                  onClick={() => setMobileMenuOpen?.(false)}
+                  className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-sm transition-colors ${active
+                    ? "border border-teal-400/15 bg-teal-400/10 font-semibold text-teal-300"
+                    : "text-slate-400 hover:bg-white/[0.05] hover:text-white"
+                    }`}
+                >
+                  <SidebarIcon name={item.icon} />
+                  <span>{item.name}</span>
+                </Link>
+              );
+            })}
+          </nav>
         </div>
 
         <div className="border-t border-white/[0.08] p-5">
