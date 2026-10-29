@@ -275,52 +275,140 @@ const fallbackEntityExtraction = (text) => {
     new Set(text.match(phoneRegex) || [])
   )
 
-  // Basic category detection
-  let category = 'Other'
-  const lower = text.toLowerCase()
 
-  if (
-    lower.includes('total') ||
-    lower.includes('receipt') ||
-    lower.includes('invoice') ||
-    amounts.length > 0
-  ) {
-    category = 'Finance'
-  } else if (
-    lower.includes('ticket') ||
-    lower.includes('flight') ||
-    lower.includes('boarding') ||
-    lower.includes('booking')
-  ) {
-    category = 'Travel'
-  } else if (
-    lower.includes('meeting') ||
-    lower.includes('event') ||
-    lower.includes('conference')
-  ) {
-    category = 'Events'
-  } else if (
-    lower.includes('assignment') ||
-    lower.includes('homework') ||
-    lower.includes('exam') ||
-    lower.includes('lecture') ||
-    lower.includes('notes')
-  ) {
-    category = 'Study'
-  } else if (
-    lower.includes('function') ||
-    lower.includes('const') ||
-    lower.includes('import') ||
-    lower.includes('class')
-  ) {
-    category = 'Documents'
-  } else if (
-    lower.includes('cart') ||
-    lower.includes('buy') ||
-    lower.includes('price') ||
-    lower.includes('order')
-  ) {
-    category = 'Shopping'
+
+  // OCR fallback category detection.
+  // Use multiple signals rather than a single matching keyword.
+  const lower = text.toLowerCase();
+
+  const categorySignals = {
+    Study: [
+      /\bassignment\b/i,
+      /\bhomework\b/i,
+      /\bexam(?:ination)?\b/i,
+      /\bquestion paper\b/i,
+      /\blecture notes?\b/i,
+      /\bsyllabus\b/i,
+      /\btextbook\b/i,
+      /\bsemester\b/i,
+      /\buniversity\b/i,
+      /\btutorial\b/i,
+    ],
+    Finance: [
+      /\bupi\b/i,
+      /\btransaction history\b/i,
+      /\bpayment (?:successful|received|sent|receipt|confirmation)\b/i,
+      /\bbank statement\b/i,
+      /\baccount balance\b/i,
+      /\baccount number\b/i,
+      /\bifsc\b/i,
+      /\bcredit card statement\b/i,
+      /\bdebit card statement\b/i,
+      /\binvoice number\b/i,
+      /\btotal amount\b/i,
+      /\bavailable balance\b/i,
+      /\bpaid to\b/i,
+      /\bcredited to\b/i,
+      /\bdebited from\b/i,
+    ],
+    Travel: [
+      /\bboarding pass\b/i,
+      /\bflight ticket\b/i,
+      /\btrain ticket\b/i,
+      /\bbus ticket\b/i,
+      /\bpnr\b/i,
+      /\bitinerary\b/i,
+      /\bhotel booking\b/i,
+      /\bdeparture\b/i,
+      /\barrival\b/i,
+      /\bflight number\b/i,
+      /\bseat number\b/i,
+    ],
+    Shopping: [
+      /\bshopping cart\b/i,
+      /\badd to cart\b/i,
+      /\bbuy now\b/i,
+      /\border confirmation\b/i,
+      /\bproduct details\b/i,
+      /\bproduct price\b/i,
+      /\bwishlist\b/i,
+      /\btrack order\b/i,
+    ],
+    Work: [
+      /\bmeeting agenda\b/i,
+      /\bproject status\b/i,
+      /\bsprint planning\b/i,
+      /\bwork report\b/i,
+      /\bbusiness proposal\b/i,
+      /\bclient meeting\b/i,
+      /\bemployee\b/i,
+      /\bwork schedule\b/i,
+    ],
+    Events: [
+      /\bevent registration\b/i,
+      /\bconference agenda\b/i,
+      /\bconcert ticket\b/i,
+      /\bevent venue\b/i,
+      /\bevent schedule\b/i,
+      /\bwebinar registration\b/i,
+      /\binvitation\b/i,
+    ],
+    Documents: [
+      /\bresume\b/i,
+      /\bcurriculum vitae\b/i,
+      /\bcontract\b/i,
+      /\bcertificate\b/i,
+      /\bapplication form\b/i,
+      /\bsource code\b/i,
+    ],
+    Notes: [
+      /\bpersonal reminder\b/i,
+      /\bto-do list\b/i,
+      /\btodo list\b/i,
+      /\bmy notes\b/i,
+      /\bpersonal note\b/i,
+    ],
+    Personal: [
+      /\bpersonal message\b/i,
+      /\bfamily photo\b/i,
+      /\bpersonal diary\b/i,
+    ],
+  };
+
+  const categoryScores = {};
+
+  for (const [categoryName, patterns] of Object.entries(categorySignals)) {
+    categoryScores[categoryName] = patterns.reduce(
+      (score, pattern) => score + (pattern.test(lower) ? 1 : 0),
+      0
+    );
+  }
+
+  // Strong financial evidence should outweigh generic travel words.
+  const strongFinanceEvidence =
+    /\b(?:upi transaction|bank statement|account balance|available balance|transaction history|ifsc code|credited to|debited from|payment successful|payment received|payment sent)\b/i.test(lower);
+
+  if (strongFinanceEvidence) {
+    categoryScores.Finance += 3;
+  }
+
+  let category = 'Other';
+  let highestScore = 0;
+  let tied = false;
+
+  for (const [categoryName, score] of Object.entries(categoryScores)) {
+    if (score > highestScore) {
+      highestScore = score;
+      category = categoryName;
+      tied = false;
+    } else if (score > 0 && score === highestScore) {
+      tied = true;
+    }
+  }
+
+  // Avoid guessing when there is no clear category evidence.
+  if (highestScore === 0 || tied) {
+    category = 'Other';
   }
 
   const firstLine =
@@ -580,7 +668,21 @@ IMPORTANT RULES:
 - Do NOT hallucinate or invent information not visible in the image.
 - If a field has no data, use an empty array [].
 - Only extract dates, tasks, events that are actually present.
-- Category should match the actual content.
+- Category must be selected based on the primary purpose and actual visual content of the screenshot, not isolated keywords.
+- Inspect visible UI elements, logos, headings, document types, and the overall context. Use OCR text as supporting evidence.
+- Choose exactly one category from the allowed list. Do not select a category merely because the screenshot contains a date, amount, company name, or URL.
+- Finance: banking apps, account balances, UPI transactions, payment confirmations, financial statements, invoices, bills, expense records, investments, and financial transactions.
+- Travel: flight or train tickets, boarding passes, bus reservations, itineraries, hotel bookings, and transport schedules.
+- Shopping: product listings, price comparisons, shopping carts, purchase pages, and order tracking.
+- Study: academic questions, course material, exam preparation, textbooks, and educational content.
+- Work: professional tasks, workplace communication, project management, business reports, and work-related dashboards.
+- Personal: personal conversations, personal photos, and individual information that does not fit another category better.
+- Notes: general notes, reminders, ideas, and lists that do not primarily belong to Study, Work, or another category.
+- Events: invitations, event announcements, conference details, and event schedules.
+- Documents: general documents, forms, certificates, and document pages that do not fit a more specific category.
+- Other: use only when the screenshot's purpose cannot reasonably be assigned to another category.
+- Finance versus Travel: a payment receipt for a flight booking is usually Travel when the main purpose is the travel reservation; a bank transaction or payment-history screen is Finance, even if it mentions a travel company.
+- If the image and OCR text provide conflicting clues, prioritize the screenshot's primary purpose and the strongest visual evidence. Do not invent details.
 - Tags should be specific and relevant to the image.
 
 SENSITIVE INFORMATION DETECTION:

@@ -1,127 +1,268 @@
-import { createWorker } from 'tesseract.js'
+
+import { createWorker, PSM } from 'tesseract.js'
 import logger from '../../utils/logger.js'
 import sharp from 'sharp'
 
+const MIN_UPSCALE_WIDTH = 2200
+const MAX_IMAGE_PIXELS = 40000000
+
 /**
- * Extract OCR text from an image file using Tesseract.js.
- * Includes sharp preprocessing to improve OCR accuracy for posters and screenshots.
- * @param {string|Buffer} imageSource - Absolute file path, URL, or Buffer
- * @returns {Promise<Object>} { text, confidence }
+ * Extract text from screenshots, photographed documents and question papers.
+ * Supports local paths, URLs and in-memory Buffers.
  */
 export const extractTextFromImage = async (imageSource) => {
   const sourceDesc = Buffer.isBuffer(imageSource)
     ? `in-memory buffer (${imageSource.length} bytes)`
-    : (typeof imageSource === 'string' ? imageSource : 'image stream')
+    : typeof imageSource === 'string'
+      ? imageSource.startsWith('http')
+        ? 'remote image URL'
+        : imageSource
+      : 'image stream'
+
   logger.info(`Starting OCR extraction for: ${sourceDesc}`)
+
   let worker = null
 
   try {
-    let processableSource = imageSource
+    let originalBuffer
 
-    // Preprocessing with sharp
-    if (Buffer.isBuffer(imageSource) || (typeof imageSource === 'string' && !imageSource.startsWith('http'))) {
-      try {
-        let image = sharp(imageSource)
-        const metadata = await image.metadata()
+    // Load remote images into memory first so preprocessing is consistent.
+    if (
+      typeof imageSource === 'string' &&
+      /^https?:\/\//i.test(imageSource)
+    ) {
+      const response = await fetch(imageSource, {
+        signal: AbortSignal.timeout(30000),
+      })
 
-        // Upscale the image if it's too small (helps OCR read small text)
-        if (metadata.width && metadata.width < 1200) {
-          image = image.resize({ width: metadata.width * 2 })
-        }
-
-        // Grayscale -> Normalize -> Sharpen -> Binarize(Threshold)
-        image = image
-          .grayscale()
-          .normalize()
-          .linear(1.2, 0) // slightly increase contrast
-          .sharpen()
-          .threshold(128) // apply threshold to create a clean black & white image
-          .png()
-
-        processableSource = await image.toBuffer()
-        logger.info(`Sharp preprocessing completed successfully.`)
-      } catch (sharpError) {
-        logger.error(`Sharp preprocessing failed, using original buffer: ${sharpError.message}`)
+      if (!response.ok) {
+        throw new Error(`Image download failed: HTTP ${response.status}`)
       }
-    } else if (typeof imageSource === 'string' && imageSource.startsWith('http')) {
-      try {
-        const response = await fetch(imageSource)
-        const arrayBuffer = await response.arrayBuffer()
-        const buffer = Buffer.from(arrayBuffer)
 
-        let image = sharp(buffer)
-        const metadata = await image.metadata()
+      const contentType = response.headers.get('content-type') || ''
 
-        if (metadata.width && metadata.width < 1200) {
-          image = image.resize({ width: metadata.width * 2 })
-        }
-
-        image = image
-          .grayscale()
-          .normalize()
-          .linear(1.2, 0)
-          .sharpen()
-          .threshold(128)
-          .png()
-
-        processableSource = await image.toBuffer()
-        logger.info(`Sharp preprocessing (from URL) completed successfully.`)
-      } catch (err) {
-        logger.error(`URL fetch or sharp preprocessing failed, using original URL: ${err.message}`)
+      if (!contentType.startsWith('image/')) {
+        throw new Error('The supplied URL did not return an image.')
       }
+
+      const arrayBuffer = await response.arrayBuffer()
+
+      if (arrayBuffer.byteLength > 25 * 1024 * 1024) {
+        throw new Error('Image exceeds the 25 MB OCR processing limit.')
+      }
+
+      originalBuffer = Buffer.from(arrayBuffer)
+    } else if (Buffer.isBuffer(imageSource)) {
+      originalBuffer = imageSource
+    } else if (typeof imageSource === 'string') {
+      originalBuffer = imageSource
+    } else {
+      throw new Error('Unsupported OCR image source.')
     }
 
-    worker = await createWorker('eng')
-    
-    // PSM 11 is Sparse text. Find as much text as possible in no particular order. Excellent for posters.
-    await worker.setParameters({
-      tessedit_pageseg_mode: '11',
+    // Auto-rotate according to EXIF metadata, preserve page details,
+    // and create several preprocessing variants for comparison.
+    const baseImage = sharp(originalBuffer, {
+      limitInputPixels: MAX_IMAGE_PIXELS,
+      failOn: 'none',
+    }).rotate()
+
+    const metadata = await baseImage.metadata()
+
+    if (!metadata.width || !metadata.height) {
+      throw new Error('Unable to read image dimensions.')
+    }
+
+    logger.info(
+      `OCR image dimensions: ${metadata.width}x${metadata.height}`
+    )
+
+    const upscale =
+      metadata.width < MIN_UPSCALE_WIDTH
+        ? MIN_UPSCALE_WIDTH / metadata.width
+        : 1
+
+    const outputWidth = Math.min(
+      Math.round(metadata.width * upscale),
+      3200
+    )
+
+    // Variant 1: grayscale, enhanced contrast, sharpened.
+    // Avoid aggressive thresholding as the default because it can
+    // erase faint text, punctuation, and characters in photographed pages.
+    const enhancedBuffer = await sharp(originalBuffer, {
+      limitInputPixels: MAX_IMAGE_PIXELS,
+      failOn: 'none',
     })
-
-    const ret = await worker.recognize(processableSource)
-    let text = ret.data.text ? ret.data.text.trim() : ''
-    let confidence = ret.data.confidence || 0
-
-    // Fallback: Test PSM 6 (Assume a single uniform block of text) if PSM 11 returned almost nothing
-    if (text.length < 15) {
-      logger.info(`PSM 11 returned low text length (${text.length} chars). Retrying with PSM 6.`)
-      await worker.setParameters({
-        tessedit_pageseg_mode: '6',
+      .rotate()
+      .resize({
+        width: outputWidth,
+        withoutEnlargement: false,
+        fit: 'inside',
       })
-      const ret6 = await worker.recognize(processableSource)
-      const text6 = ret6.data.text ? ret6.data.text.trim() : ''
-      if (text6.length > text.length) {
-        text = text6
-        confidence = ret6.data.confidence || 0
-        logger.info(`PSM 6 yielded better results (${text.length} chars).`)
+      .grayscale()
+      .normalize()
+      .sharpen({
+        sigma: 1.2,
+        m1: 0.7,
+        m2: 2,
+      })
+      .png()
+      .toBuffer()
+
+    // Variant 2: a clean, thresholded image for cases where the
+    // original photograph has shadows or an uneven background.
+    const thresholdBuffer = await sharp(enhancedBuffer)
+      .normalize()
+      .threshold(165)
+      .png()
+      .toBuffer()
+
+    // Variant 3: grayscale without hard thresholding. This can retain
+    // faint text that disappears in black-and-white conversion.
+    const grayscaleBuffer = await sharp(originalBuffer, {
+      limitInputPixels: MAX_IMAGE_PIXELS,
+      failOn: 'none',
+    })
+      .rotate()
+      .resize({
+        width: outputWidth,
+        withoutEnlargement: false,
+        fit: 'inside',
+      })
+      .grayscale()
+      .normalize()
+      .png()
+      .toBuffer()
+
+    logger.info(
+      `OCR preprocessing complete. Recognition width: ${outputWidth}px`
+    )
+
+    worker = await createWorker('eng')
+
+    const variants = [
+      {
+        name: 'enhanced-document',
+        buffer: enhancedBuffer,
+        psm: PSM.AUTO,
+      },
+      {
+        name: 'single-column',
+        buffer: grayscaleBuffer,
+        psm: PSM.SINGLE_COLUMN,
+      },
+      {
+        name: 'uniform-block',
+        buffer: grayscaleBuffer,
+        psm: PSM.SINGLE_BLOCK,
+      },
+      {
+        name: 'thresholded-document',
+        buffer: thresholdBuffer,
+        psm: PSM.AUTO,
+      },
+    ]
+
+    let bestResult = {
+      text: '',
+      confidence: 0,
+      score: -1,
+      variant: 'none',
+    }
+
+    for (const variant of variants) {
+      await worker.setParameters({
+        tessedit_pageseg_mode: variant.psm,
+        preserve_interword_spaces: '1',
+      })
+
+      const result = await worker.recognize(variant.buffer)
+
+      const text = (result.data.text || '').trim()
+      const confidence = Number(result.data.confidence) || 0
+
+      // Prefer meaningful text and confidence, while avoiding a result
+      // that contains only a few high-confidence characters.
+      const wordCount = text.split(/\s+/).filter(Boolean).length
+      const usefulCharacters = (text.match(/[a-zA-Z0-9]/g) || []).length
+      const replacementCharacters = (text.match(/\uFFFD/g) || []).length
+
+      const score =
+        usefulCharacters +
+        wordCount * 3 +
+        confidence * 0.8 -
+        replacementCharacters * 20
+
+      logger.info(
+        `OCR variant ${variant.name}: ${text.length} chars, ` +
+          `${confidence.toFixed(1)}% confidence, score ${score.toFixed(1)}`
+      )
+
+      if (score > bestResult.score) {
+        bestResult = {
+          text,
+          confidence,
+          score,
+          variant: variant.name,
+        }
       }
     }
 
     await worker.terminate()
+    worker = null
 
-    logger.info(`OCR extraction completed (${confidence.toFixed(1)}% confidence, ${text.length} chars)`)
-    
-    // Log a safe preview of the OCR output (max 100 chars, no newlines)
-    const preview = text.replace(/\n/g, ' ').substring(0, 100)
-    logger.info(`OCR Preview: ${preview}${text.length > 100 ? '...' : ''}`)
+    const text = bestResult.text
+
+    logger.info(
+      `OCR completed using ${bestResult.variant}: ` +
+        `${bestResult.confidence.toFixed(1)}% confidence, ` +
+        `${text.length} characters`
+    )
+
+    // Keep original paragraph boundaries while removing excessive
+    // blank lines and trailing whitespace.
+    const cleanedText = text
+      .replace(/\r\n/g, '\n')
+      .replace(/[ \t]+\n/g, '\n')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim()
+
+    // Log only a short preview.
+    const preview = cleanedText
+      .replace(/\s+/g, ' ')
+      .slice(0, 120)
+
+    logger.info(
+      `OCR preview: ${preview}${cleanedText.length > 120 ? '...' : ''}`
+    )
 
     return {
-      text,
-      confidence,
+      text: cleanedText,
+      confidence: bestResult.confidence,
+      variant: bestResult.variant,
     }
   } catch (error) {
-    logger.error(`OCR processing failed for ${sourceDesc}:`, error.message)
-    if (worker) {
-      try {
-        await worker.terminate()
-      } catch (_e) {
-        // ignore cleanup error
-      }
-    }
+    logger.error(
+      `OCR processing failed for ${sourceDesc}:`,
+      error.message
+    )
+
     return {
       text: '',
       confidence: 0,
       error: error.message,
+    }
+  } finally {
+    if (worker) {
+      try {
+        await worker.terminate()
+      } catch (cleanupError) {
+        logger.error(
+          'Failed to terminate OCR worker:',
+          cleanupError.message
+        )
+      }
     }
   }
 }

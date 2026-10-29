@@ -12,14 +12,7 @@ import {
   deleteScreenshotApi,
 } from "../utils/api";
 import ScreenshotDetailsModal from "../components/ScreenshotDetailsModal";
-
-const navigation = [
-  { name: "Dashboard", icon: "▦", href: "/dashboard" },
-  { name: "Screenshots", icon: "▧", href: "/screenshots" },
-  { name: "Action Center", icon: "✓", href: "/action-center" },
-  { name: "Calendar", icon: "▦", href: "/calendar" },
-  { name: "Vault", icon: "▣", href: "/vault" },
-];
+import Sidebar from "../components/Sidebar";
 
 function getTitle(item) {
   return (
@@ -189,7 +182,6 @@ export default function Dashboard() {
       selectedScreenshot._id || selectedScreenshot.id;
 
     if (!screenshotId) return;
-
     if (!isProcessing(selectedScreenshot)) return;
 
     pollIntervalRef.current = setInterval(async () => {
@@ -434,81 +426,12 @@ export default function Dashboard() {
       </header>
 
       <div className="flex min-h-[calc(100vh-72px)]">
-        {/* Mobile overlay */}
-        {mobileMenuOpen && (
-          <button
-            type="button"
-            aria-label="Close navigation"
-            onClick={() => setMobileMenuOpen(false)}
-            className="fixed inset-0 z-20 bg-black/60 md:hidden"
-          />
-        )}
-
-        {/* Sidebar */}
-        <aside
-          className={`fixed bottom-0 left-0 top-[72px] z-30 flex w-64 flex-col border-r border-white/[0.08] bg-[#0b111b] transition-transform duration-200 md:sticky md:top-[72px] md:h-[calc(100vh-72px)] md:translate-x-0 ${mobileMenuOpen ? "translate-x-0" : "-translate-x-full"
-            }`}
-        >
-          <div className="p-5">
-            <p className="mb-4 px-3 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">
-              WORKSPACE
-            </p>
-
-            <nav className="space-y-1">
-              {navigation.map((item, index) => {
-                const active = index === 0;
-
-                return (
-                  <Link
-                    key={item.name}
-                    href={item.href}
-                    onClick={() => setMobileMenuOpen(false)}
-                    className={`flex items-center gap-3 rounded-xl px-3 py-3 text-sm transition ${active
-                        ? "border border-teal-400/15 bg-teal-400/10 font-semibold text-teal-300"
-                        : "text-slate-400 hover:bg-white/[0.04] hover:text-white"
-                      }`}
-                  >
-                    <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/[0.04] text-base">
-                      {item.icon}
-                    </span>
-                    {item.name}
-                  </Link>
-                );
-              })}
-            </nav>
-
-            <div className="my-6 border-t border-white/[0.08]" />
-
-            <p className="mb-4 px-3 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">
-              PREFERENCES
-            </p>
-
-            <Link
-              href="/settings"
-              className="flex items-center gap-3 rounded-xl px-3 py-3 text-sm text-slate-400 transition hover:bg-white/[0.04] hover:text-white"
-            >
-              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/[0.04]">
-                ⚙
-              </span>
-              Settings
-            </Link>
-          </div>
-
-          <div className="mt-auto border-t border-white/[0.08] p-5">
-            <div className="rounded-xl border border-teal-400/10 bg-teal-400/[0.04] p-4">
-              <p className="text-xs font-semibold text-teal-200">
-                Your workspace
-              </p>
-              <p className="mt-2 text-xs leading-5 text-slate-400">
-                Keep useful information organized and easy to find.
-              </p>
-            </div>
-
-            <div className="mt-5 truncate text-xs text-slate-500">
-              Signed in as {displayName}
-            </div>
-          </div>
-        </aside>
+        <Sidebar
+          mobileMenuOpen={mobileMenuOpen}
+          setMobileMenuOpen={setMobileMenuOpen}
+          user={user}
+          userName={displayName}
+        />
 
         {/* Main dashboard */}
         <main className="min-w-0 flex-1 px-4 py-7 sm:px-6 sm:py-9 lg:px-9">
